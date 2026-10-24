@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mediaFixtures } from './media-fixtures.mjs';
 
 const url = process.env.RIGEL_URL || "http://127.0.0.1:4321/rigel/";
 const file = "src/content/news/launch-week.json";
 const original = await readFile(file);
 await mkdir("_temp", { recursive: true });
+await writeFile('_temp/media-edit.mp4', mediaFixtures.find(asset => asset.type === 'video/mp4').bytes);
+const videoUrl = `/@fs/${process.cwd()}/_temp/media-edit.mp4`;
 const profile = await mkdtemp(`${process.cwd()}/_temp/media-insert-`);
 const chrome = spawn(process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", ["--headless=new", "--no-first-run", "--no-default-browser-check", "--window-size=1440,1000", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
 let socket;
@@ -51,7 +54,62 @@ try {
     await waitFor("!!document.querySelector('tbody .table-link')");
     await evaluate(`[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)}).querySelector('.table-link').click()`);
   };
-  const embedSrc = () => evaluate("[...document.querySelectorAll('.block-content figure.media-embed iframe')].map(frame => frame.src)");
+  const checkEmbed = async () => {
+    await waitFor("!!document.querySelector('.block-content figure[data-rigel-embed=youtube] img')");
+    assert.equal(await evaluate("document.querySelector('.block-content figure.media-embed iframe')"), null, 'Editor never loads an embedded player');
+    assert.equal(await evaluate("document.querySelector('.block-content figure.media-embed img').src"), 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
+    assert.equal(await evaluate("document.querySelector('.block-content figure.media-embed strong').textContent"), 'YouTube Video');
+    assert.equal(await evaluate("document.querySelector('.block-content figure.media-embed [data-rigel-edit-video]').hidden"), false);
+    assert.equal(await evaluate("!!document.querySelector('[data-play],.video-toolbar')"), false);
+    assert.equal(await evaluate("document.querySelector('.block-content figure.media-embed figcaption').textContent"), 'YouTube · Rick Astley - Never Gonna Give You Up (Rickroll)');
+  };
+  const mouseClick = async (doc, selector) => {
+      const point = await evaluate(`(() => {const el=${doc}.querySelector(${JSON.stringify(selector)});el.scrollIntoView({block:'center'});const rect=el.getBoundingClientRect(),frame=${doc}.defaultView.frameElement,box=frame?.getBoundingClientRect(),scale=frame ? box.width/frame.clientWidth : 1;return {x:(box?.left??0)+(rect.left+rect.width/2)*scale,y:(box?.top??0)+(rect.top+rect.height/2)*scale};})()`);
+      await cdp('Input.dispatchMouseEvent', {type:'mousePressed',...point,button:'left',clickCount:1});
+      await cdp('Input.dispatchMouseEvent', {type:'mouseReleased',...point,button:'left',clickCount:1});
+  };
+  const editVideo = async (doc, selector, expectedUrl, expectedTitle) => {
+    const disk = await readFile(file, 'utf8');
+    const mediaClick = selector => mouseClick(doc, selector);
+    const mediaType = (selector, value) => evaluate(`(() => {const field=${doc}.querySelector(${JSON.stringify(selector)});field.focus();field.value=${JSON.stringify(value)};field.dispatchEvent(new field.ownerDocument.defaultView.Event('input',{bubbles:true}));})()`);
+    await evaluate(`${doc}.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'})`);
+    assert.equal(await evaluate(`(() => {const figure=${doc}.querySelector(${JSON.stringify(selector)}),card=figure.querySelector('[data-rigel-edit-video]').parentElement,box=figure.getBoundingClientRect(),rect=card.getBoundingClientRect();return rect.left>=box.left && rect.right<=box.right && rect.right<=${doc}.documentElement.clientWidth && card.scrollWidth<=card.clientWidth;})()`), true, 'Video overlay fits its container and viewport');
+    await writeFile(`_temp/video-edit-${doc === 'document' ? 'sidebar' : 'inline'}-${selector.includes('youtube') ? 'youtube' : selector.includes('vimeo') ? 'vimeo' : 'file'}.png`, Buffer.from((await cdp('Page.captureScreenshot', {format:'png'})).data, 'base64'));
+    await mediaClick(`${selector} [data-rigel-edit-video]`);
+    try { await waitFor(`!!${doc}.querySelector('dialog.media-insert[open][aria-label="Edit video"]')`); }
+    catch (error) { throw new Error(`${error.message}\n${await evaluate(`JSON.stringify({editing:!!${doc}.querySelector('.block-content'),buttons:[...${doc}.querySelectorAll('[data-rigel-edit-video]')].map(button=>({hidden:button.hidden,key:button.closest('figure')?.dataset.blockKey})),dialogs:[...${doc}.querySelectorAll('dialog')].map(dialog=>({open:dialog.open,label:dialog.ariaLabel})),active:${doc}.activeElement?.outerHTML.slice(0,100)})`)}`); }
+    const fields = await evaluate(`[...${doc}.querySelectorAll('dialog.media-insert input[type=text]')].map(input=>input.value)`);
+    assert.deepEqual(fields, [expectedUrl, expectedTitle], 'Editing starts with the selected video values');
+    const titleInput = `dialog.media-insert label:nth-of-type(${selector.includes('media-video') ? 3 : 2}) input`;
+    await mediaType(titleInput, 'Cancelled edit');
+    await cdp('Input.dispatchKeyEvent', {type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+    await cdp('Input.dispatchKeyEvent', {type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+    await waitFor(`!${doc}.querySelector('dialog.media-insert[open]')`);
+    await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+    await evaluate(`${doc}.querySelector(${JSON.stringify(selector + ' [data-rigel-edit-video]')}).focus()`);
+    assert.equal(await evaluate(`${doc}.activeElement?.matches('[data-rigel-edit-video]')`), true, 'Overlay edit button can receive keyboard focus');
+    await cdp('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+    await cdp('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+    await waitFor(`!!${doc}.querySelector('dialog.media-insert[open]')`);
+    assert.equal(await evaluate(`${doc}.querySelector(${JSON.stringify(titleInput)}).value`), expectedTitle, 'Escape discards modal edits');
+    const editedUrl = expectedUrl.includes('youtube.com') ? 'https://www.youtube.com/watch?v=jNQXAC9IVRw' : expectedUrl.includes('vimeo.com') ? 'https://vimeo.com/76979871' : expectedUrl;
+    const urlInput = 'dialog.media-insert input[type=text]';
+    await mediaType(urlInput, editedUrl);
+    await mediaType(titleInput, expectedTitle + ' edited');
+    await mediaClick('dialog.media-insert .primary');
+    assert.equal(await evaluate(`!!${doc}.querySelector('dialog[open]')`), false, await evaluate(`JSON.stringify([...${doc}.querySelectorAll('dialog[open]')].map(dialog=>({text:dialog.textContent,style:${doc}.defaultView.getComputedStyle(dialog).pointerEvents,button:dialog.querySelector('.primary')?.getBoundingClientRect().toJSON()})))`));
+    await waitFor(`${doc}.querySelector(${JSON.stringify(selector)}).textContent.includes(${JSON.stringify(expectedTitle + ' edited')})`);
+    await mediaClick(`${selector} [data-rigel-edit-video]`);
+    await waitFor(`!!${doc}.querySelector('dialog.media-insert[open]')`);
+    assert.equal(await evaluate(`${doc}.querySelector(${JSON.stringify(urlInput)}).value`), editedUrl, 'Edited video URL is retained');
+    await mediaType(urlInput, expectedUrl);
+    await mediaType(titleInput, expectedTitle);
+    await mediaClick('dialog.media-insert .primary');
+    await waitFor(`!${doc}.querySelector('dialog[open]') && ${doc}.querySelector(${JSON.stringify(selector)}).textContent.endsWith(${JSON.stringify(expectedTitle)})`);
+    await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+    assert.equal(await evaluate(`${doc}.querySelectorAll(${JSON.stringify(selector)}).length`), 1, 'Editing replaces the selected video instead of duplicating it');
+    assert.equal(await readFile(file, 'utf8'), disk, 'Editing does not autosave');
+  };
   const checkActions = async () => {
     assert.equal(await evaluate("(() => {const dialog=document.querySelector('dialog.media-insert'),rect=dialog.getBoundingClientRect(),style=getComputedStyle(dialog);return rect.width===innerWidth && rect.height===innerHeight && style.borderTopWidth==='0px' && style.paddingTop==='16px';})()"), true, 'Native dialog uses the shared full-viewport reset');
     assert.equal(await evaluate("getComputedStyle(document.querySelector('dialog.media-insert .media-button-actions')).borderTopWidth"), '1px', 'Footer uses the shared divider');
@@ -110,10 +168,27 @@ try {
     await writeFile(`_temp/media-insert-${width}-${theme}.png`, Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   }
   await evaluate("[...document.querySelectorAll('dialog.media-insert button')].find(button => button.textContent.trim() === 'Insert').click()");
-  await waitFor("!!document.querySelector('.block-content figure.media-embed iframe')");
-  const src = (await embedSrc())[0];
-  assert.equal(src, "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0", `Privacy-enhanced YouTube embed expected, got ${src}`);
-  assert.equal(await evaluate("document.querySelector('.block-content figure.media-embed iframe').title"), "Rick Astley - Never Gonna Give You Up (Rickroll)", "Embed keeps the example title");
+  await checkEmbed();
+
+  await click('.body-toolbar [aria-label="Insert media"]');
+  await waitFor("!!document.querySelector('.media-menu:popover-open')");
+  await evaluate("[...document.querySelectorAll('.media-menu:popover-open [role=menuitem]')].find(item => item.textContent.includes('Vimeo')).click()");
+  await waitFor("!!document.querySelector('dialog.media-insert[open]')");
+  await evaluate("[...document.querySelectorAll('dialog.media-insert button')].find(button=>button.textContent.trim()==='Insert').click()");
+  await waitFor("!!document.querySelector('.block-content figure[data-rigel-embed=vimeo]')");
+  assert.equal(await evaluate("document.querySelector('.block-content figure[data-rigel-embed=vimeo] figcaption').textContent"), 'Vimeo · The Rolling Stones - Angry');
+  assert.equal(await evaluate("document.querySelector('.block-content figure[data-rigel-embed=vimeo] strong').textContent"), 'Vimeo Video');
+  await editVideo('document', '.block-content figure[data-rigel-embed=youtube]', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Rick Astley - Never Gonna Give You Up (Rickroll)');
+  await editVideo('document', '.block-content figure[data-rigel-embed=vimeo]', 'https://vimeo.com/861680818', 'The Rolling Stones - Angry');
+  await click('.body-toolbar [data-media-trigger]');
+  await waitFor("!!document.querySelector('.media-menu:popover-open')");
+  await evaluate("[...document.querySelectorAll('.media-menu:popover-open [role=menuitem]')].find(item => item.textContent.trim()==='Video').click()");
+  await waitFor("!!document.querySelector('dialog.media-insert[open]')");
+  await type('dialog.media-insert input[type=text]', videoUrl);
+  await type('dialog.media-insert label:nth-of-type(3) input', 'Fixture video');
+  await click('dialog.media-insert .primary');
+  await waitFor("!!document.querySelector('.block-content figure.media-video')");
+  await editVideo('document', '.block-content figure.media-video', videoUrl, 'Fixture video');
 
   await click(".save-button");
   await waitFor("document.querySelector('.save-status')?.textContent.trim() === 'Saved'");
@@ -122,11 +197,15 @@ try {
   assert.equal(saved.body.root.children[0].type, 'embed', 'Slash insertion replaces the command paragraph in place');
   assert.equal(JSON.stringify(saved.body).includes('/youtube'), false, 'Slash command text is not saved');
   assert.deepEqual(node, { provider: "youtube", id: "dQw4w9WgXcQ", title: "Rick Astley - Never Gonna Give You Up (Rickroll)", privacy: true, type: "embed", version: 1 }, "Saved embed keeps provider, id, title and privacy");
+  const publicUrl = new URL(`/news/${saved.frontmatter.slug || 'launch-week'}/`, url).href;
+  await waitFor(`(async () => (await (await fetch(${JSON.stringify(publicUrl)})).text()).includes('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0'))()`);
+  await waitFor(`(async () => (await (await fetch(${JSON.stringify(publicUrl)})).text()).includes('https://player.vimeo.com/video/861680818?dnt=1'))()`);
 
   await navigate(url);
   await open("news", "launch-week");
-  await waitFor("!!document.querySelector('.block-content figure.media-embed iframe')");
-  assert.equal((await embedSrc())[0], "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0", "Reload restores the privacy-enhanced embed");
+  await checkEmbed();
+  await waitFor("!!document.querySelector('.visual-editor iframe').contentDocument?.querySelector('figure[data-rigel-embed=youtube] img')");
+  await waitFor("!!document.querySelector('.visual-editor iframe').contentDocument?.querySelector('figure[data-rigel-embed=vimeo]')");
   await click('.markdown-modes button');
   await waitFor("!!document.querySelector('.block-markdown')");
   assert.ok((await evaluate("document.querySelector('.block-markdown').textContent")).includes("[Rick Astley - Never Gonna Give You Up (Rickroll)](<https://www.youtube.com/watch?v=dQw4w9WgXcQ>)"), "Markdown view links the original video with its title");
@@ -140,13 +219,22 @@ try {
   await click('.settings-head .close');
   await waitFor("document.querySelector('.canvas-stage')?.dataset.ready==='true'");
   const frameDoc = "document.querySelector('.visual-editor iframe').contentDocument";
-  await evaluate(`${frameDoc}.querySelector('[data-rigel-richtext="$body"] p').click()`);
-  await waitFor(`!!${frameDoc}.querySelector('.block-content')`);
+  assert.equal(await evaluate(`${frameDoc}.querySelector('figure[data-rigel-embed=youtube] [data-rigel-edit-video]').hidden`), false, 'Reloaded preview offers editing before entering the block editor');
+  await evaluate(`${frameDoc}.querySelector('figure[data-rigel-embed=youtube]').scrollIntoView({block:'center'})`);
+  await waitFor(`${frameDoc}.querySelector('figure[data-rigel-embed=youtube] img').complete`);
+  await writeFile('_temp/embed-preview.png', Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  await editVideo(frameDoc, 'figure[data-rigel-embed=youtube]', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Rick Astley - Never Gonna Give You Up (Rickroll)');
+  await editVideo(frameDoc, '.block-content figure[data-rigel-embed=vimeo]', 'https://vimeo.com/861680818', 'The Rolling Stones - Angry');
+  await editVideo(frameDoc, '.block-content figure.media-video', videoUrl, 'Fixture video');
+  await evaluate(`${frameDoc}.querySelector('.block-content p').click()`);
   for (const choice of ['image', 'video', 'youtube', 'vimeo']) {
     await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+    await mouseClick(frameDoc, '.block-content p');
     await evaluate(`(() => {const doc=${frameDoc},root=doc.querySelector('.block-content'),node=root.querySelector('p');root.focus();const range=doc.createRange();range.selectNodeContents(node);const selection=doc.defaultView.getSelection();selection.removeAllRanges();selection.addRange(range);})()`);
+    await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
     for (const character of `/${choice}`) await cdp('Input.insertText', { text: character });
-    await waitFor(`!![...${frameDoc}.querySelectorAll('.block-slash [role=option]')].find(option=>option.textContent.toLowerCase()===${JSON.stringify(choice)})`);
+    try { await waitFor(`!![...${frameDoc}.querySelectorAll('.block-slash [role=option]')].find(option=>option.textContent.toLowerCase()===${JSON.stringify(choice)})`); }
+    catch (error) { throw new Error(`${error.message}\n${await evaluate(`JSON.stringify({text:${frameDoc}.querySelector('.block-content')?.textContent,active:${frameDoc}.activeElement?.outerHTML.slice(0,200),menu:${frameDoc}.querySelector('.block-slash')?.outerHTML,selection:${frameDoc}.defaultView.getSelection()?.anchorNode?.parentElement?.outerHTML.slice(0,200)})`)}`); }
     await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', windowsVirtualKeyCode: 13 });
     await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', windowsVirtualKeyCode: 13 });
     await waitFor(`!!${frameDoc}.querySelector('dialog[open]')`);
@@ -180,7 +268,7 @@ try {
   assert.equal(await evaluate(`${frameDoc}.querySelector('.block-content').textContent`), unsavedBody, 'Leaving content still guards the unsaved draft');
 
   assert.deepEqual(errors, [], errors.join("\n"));
-  console.log("PASS: insert media menu adds a privacy-enhanced YouTube embed, saves, reloads and projects Markdown");
+  console.log("PASS: media insert/save/reload; direct overlay editing by real mouse and keyboard; cancel, update-in-place and no autosave in sidebar/inline");
 } finally {
   socket?.close();
   await (await import("node:fs/promises")).writeFile(file, original);
