@@ -1,0 +1,25 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import "../tests/local-only.mjs";
+
+const suites = ["demo", "settings", "visual", "blog-blocks", "preview", "richtext", "media", "website", "github"];
+const selected = process.argv.slice(2);
+const root = fileURLToPath(new URL("../", import.meta.url));
+for (const suite of selected.length ? selected : suites) {
+  assert.ok(suites.includes(suite), `Unknown browser suite: ${suite}`);
+  console.log(`\nRunning ${suite}`);
+  const files = () => ['src/content', 'public'].flatMap(directory => readdirSync(join(root, directory), { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)));
+  const originals = new Map(files().map(file => [file, readFileSync(file)]));
+  let result;
+  try {
+    result = spawnSync(process.execPath, [`tests/${suite}.mjs`], { cwd: root, stdio: "inherit", timeout: 300_000 });
+  } finally {
+    for (const file of files()) if (!originals.has(file)) rmSync(file);
+    for (const [file, bytes] of originals) writeFileSync(file, bytes);
+  }
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}

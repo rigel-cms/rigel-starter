@@ -1,0 +1,8 @@
+---
+import PostPage from "../../components/PostPage.astro";
+export function getStaticPaths() {
+  return ["blog", "news"].map(collection => ({ params: { collection } }));
+}
+const { collection } = Astro.params;
+---
+<PostPage data={{ title: "New post", date: "", author: "" }} collection={collection} />

@@ -1,0 +1,26 @@
+import { defineCollection } from "astro:content";
+import { z } from "astro/zod";
+import { glob } from "astro/loaders";
+
+const article = z.object({
+  slug: z.string().optional(),
+  title: z.string(),
+  metaTitle: z.string().optional(),
+  description: z.string().optional(),
+  ogImage: z.string().optional(),
+  date: z.string(),
+  author: z.union([z.string(), z.array(z.string())]),
+  draft: z.boolean().default(false),
+});
+
+const blog = defineCollection({
+  loader: glob({ pattern: "**/*.json", base: "./src/content/blog" }),
+  schema: z.object({ frontmatter: article.extend({ tags: z.array(z.string()).default([]) }), body: z.object({ root: z.object({ type: z.literal("root") }).loose() }).loose() }).transform(({ frontmatter, body }) => ({ ...frontmatter, body })),
+});
+
+const news = defineCollection({
+  loader: glob({ pattern: "**/*.json", base: "./src/content/news" }),
+  schema: z.object({ frontmatter: article, body: z.object({ root: z.object({ type: z.literal("root") }).loose() }).loose() }).transform(({ frontmatter, body }) => ({ ...frontmatter, body })),
+});
+
+export const collections = { blog, news };

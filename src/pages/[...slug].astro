@@ -1,0 +1,16 @@
+---
+import Base from "../layouts/Base.astro";
+import SectionRenderer from "../components/SectionRenderer.astro";
+import { documents } from "virtual:rigel-content";
+
+export function getStaticPaths() {
+  return documents
+    .filter((doc) => doc.type === "page" && (import.meta.env.DEV || doc.data.draft !== true))
+    .map((doc) => ({ params: { slug: doc.slug === "home" ? undefined : doc.slug }, props: { doc } }));
+}
+
+const { doc } = Astro.props;
+---
+<Base title={String(doc.data.metaTitle ?? "").trim() || String(doc.data.title)} description={String(doc.data.description ?? "").trim() || undefined} ogImage={String(doc.data.ogImage ?? "").trim() || undefined}>
+  <SectionRenderer {doc} />
+</Base>
