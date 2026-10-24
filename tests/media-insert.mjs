@@ -156,6 +156,29 @@ try {
   }
   assert.ok((await readFile(file)).equals(Buffer.from(JSON.stringify(saved, null, 2)+'\n')), 'Inline slash commands never autosave');
 
+  const unsavedBody = await evaluate(`${frameDoc}.querySelector('.block-content').textContent`);
+  await click('.user-btn');
+  await evaluate("[...document.querySelectorAll('.user-menu button')].find(button=>button.textContent.includes('Settings')).click()");
+  await waitFor("!!document.querySelector('.settings-modal')");
+  assert.equal(await evaluate("!!document.querySelector('.unsaved-dialog')"), false, 'Settings opens without a navigation guard');
+  await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Media').click()");
+  await waitFor("!!document.querySelector('.settings-pane input')");
+  await type('.settings-pane input', 'test-only-api-key');
+  await waitFor("JSON.parse(localStorage.getItem('rigelcms.settings')).apiKeys.pexels==='test-only-api-key'");
+  await click('.settings-head .close');
+  assert.equal(await evaluate(`${frameDoc}.querySelector('.block-content').textContent`), unsavedBody, 'API-key settings preserve the unsaved article');
+  assert.equal(await evaluate("document.querySelector('.save-button').disabled"), false);
+  assert.ok((await readFile(file)).equals(Buffer.from(JSON.stringify(saved, null, 2)+'\n')), 'Settings never saves content');
+  await click('.user-btn');
+  await evaluate("[...document.querySelectorAll('.user-menu button')].find(button=>button.textContent.includes('Keyboard Shortcuts')).click()");
+  await waitFor("!!document.querySelector('[aria-label=\"Keyboard shortcuts\"]')");
+  assert.equal(await evaluate("!!document.querySelector('.unsaved-dialog')"), false, 'Shortcuts also opens over unsaved edits');
+  await click('.rigel-modal-backdrop');
+  await click('.brand');
+  await waitFor("!!document.querySelector('.unsaved-dialog[open]')");
+  await evaluate("[...document.querySelectorAll('.unsaved-dialog button')].find(button=>button.textContent.trim()==='Keep editing').click()");
+  assert.equal(await evaluate(`${frameDoc}.querySelector('.block-content').textContent`), unsavedBody, 'Leaving content still guards the unsaved draft');
+
   assert.deepEqual(errors, [], errors.join("\n"));
   console.log("PASS: insert media menu adds a privacy-enhanced YouTube embed, saves, reloads and projects Markdown");
 } finally {

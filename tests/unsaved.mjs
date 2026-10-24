@@ -164,16 +164,17 @@ export async function checkUnsaved({ cdp, evaluate, waitFor }) {
     await waitFor("!!document.querySelector('.table-link')");
     await openRow('#nav-pages');
     await waitFor(`!!document.querySelector(${JSON.stringify(field)})`);
-    const baseline = await value();
+    const beforeSettings = await count();
     await edit('Unsaved before settings');
     await click('.user-btn');
     await waitFor("!!document.querySelector('.user-menu')");
     await evaluate("[...document.querySelectorAll('.user-menu button')].find(b => b.textContent.trim() === 'Settings').click()");
-    await waitFor("!!document.querySelector('.unsaved-dialog[open]')");
-    await choice('Discard changes');
     await waitFor("!!document.querySelector('.settings-modal')");
-    assert.equal(await value(), baseline);
+    assert.equal(await evaluate("!!document.querySelector('.unsaved-dialog')"), false);
+    assert.equal(await value(), 'Unsaved before settings');
     await click('.settings-head .close');
+    assert.equal(await value(), 'Unsaved before settings');
+    assert.equal(await count(), beforeSettings, 'Settings must neither save nor discard the draft');
     await edit('Unsaved before search');
     await click('.search-trigger');
     await waitFor("!!document.querySelector('.palette')");
@@ -187,7 +188,7 @@ export async function checkUnsaved({ cdp, evaluate, waitFor }) {
     await waitFor("!!document.querySelector('.unsaved-dialog[open]')");
     await choice('Discard changes');
     await waitFor("!!document.querySelector('.table-link')");
-    console.log('PASS: explicit Save for pages/blogs/news/menus, no autosave, unsaved modal Save/Discard/X/Escape, focus trap, error retention, settings guard, new-entry drafts and unload protection (mocked writes)');
+    console.log('PASS: explicit Save for pages/blogs/news/menus, no autosave, unsaved modal Save/Discard/X/Escape, focus trap, error retention, settings preserves drafts, new-entry drafts and unload protection (mocked writes)');
   } finally {
     await evaluate('window.fetch = window.explicitOriginalFetch');
     await click('.brand');
