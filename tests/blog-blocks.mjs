@@ -75,7 +75,7 @@ try {
     await evaluate(`[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)}).querySelector('.table-link').click()`);
     await waitFor("document.querySelector('.block-content')?.children.length > 0 && document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
   };
-  await cdp('Page.addScriptToEvaluateOnNewDocument', { source: "localStorage.setItem('rigelcms.settings',JSON.stringify({theme:'light',devMode:true})); window.alert=window.confirm=window.prompt=()=>{throw Error('No native dialogs')};" });
+  await cdp('Page.addScriptToEvaluateOnNewDocument', { source: "localStorage.setItem('rigelcms.settings',JSON.stringify({theme:'light',devMode:true,userPref:{editorExperience:'sidebar'}})); window.alert=window.confirm=window.prompt=()=>{throw Error('No native dialogs')};" });
   await navigate('Page.navigate', { url });
   await open('news', 'launch-week');
   assert.equal(await evaluate("document.querySelector('[data-collection-field=\"$body\"] .ProseMirror') === null"), true);
