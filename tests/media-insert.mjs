@@ -75,6 +75,12 @@ try {
       await cdp('Input.dispatchMouseEvent', {type:'mousePressed',...point,button:'left',clickCount:1});
       await cdp('Input.dispatchMouseEvent', {type:'mouseReleased',...point,button:'left',clickCount:1});
   };
+  const openMediaMenu = async doc => {
+    await mouseClick(doc, '.body-toolbar [data-media-trigger]');
+    await waitFor(`!!${doc}.querySelector('.media-menu:popover-open')`);
+    assert.equal(await evaluate(`(() => {const doc=${doc},button=doc.querySelector('.body-toolbar [data-media-trigger]').getBoundingClientRect(),menu=doc.querySelector('.media-menu:popover-open').getBoundingClientRect(),view=doc.defaultView,left=Math.max(8,Math.min(button.left,view.innerWidth-menu.width-8)),top=button.bottom+4+menu.height<=view.innerHeight-8?button.bottom+4:Math.max(8,button.top-menu.height-4);return Math.abs(menu.left-left)<1 && Math.abs(menu.top-top)<1 && menu.right<=view.innerWidth-7 && menu.bottom<=view.innerHeight-7;})()`), true, 'Media menu is anchored to the clicked button and fits the viewport');
+    await writeFile(`_temp/media-menu-${doc === 'document' ? 'sidebar' : 'inline'}-${await evaluate(`${doc}.defaultView.innerWidth`)}.png`, Buffer.from((await cdp('Page.captureScreenshot', {format:'png'})).data, 'base64'));
+  };
   const editVideo = async (doc, selector, expectedUrl, expectedTitle) => {
     const disk = await readFile(file, 'utf8');
     const mediaClick = selector => mouseClick(doc, selector);
@@ -216,8 +222,7 @@ try {
     assert.equal(await evaluate("document.querySelector('.block-content p').textContent"), `/${choice}`, 'Cancel leaves the slash paragraph intact');
   }
 
-  await click('.body-toolbar [aria-label="Insert media"]');
-  await waitFor("!!document.querySelector('.media-menu:popover-open')");
+  await openMediaMenu('document');
   await evaluate("[...document.querySelectorAll('.media-menu:popover-open [role=menuitem]')].find(item => item.textContent.includes('Vimeo')).click()");
   await waitFor("!!document.querySelector('dialog.media-insert[open]')");
   assert.deepEqual(await evaluate("[...document.querySelectorAll('dialog.media-insert input[type=text]')].map(input=>input.value)"), ["https://vimeo.com/861680818", "The Rolling Stones - Angry"], "Vimeo opens with an editable example URL and title");
@@ -249,8 +254,7 @@ try {
   assert.equal(await evaluate("document.querySelector('.block-content figure[data-rigel-embed=vimeo] strong').textContent"), 'Vimeo Video');
   await editVideo('document', '.block-content figure[data-rigel-embed=youtube]', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Rick Astley - Never Gonna Give You Up (Rickroll)');
   await editVideo('document', '.block-content figure[data-rigel-embed=vimeo]', 'https://vimeo.com/861680818', 'The Rolling Stones - Angry');
-  await click('.body-toolbar [data-media-trigger]');
-  await waitFor("!!document.querySelector('.media-menu:popover-open')");
+  await openMediaMenu('document');
   await evaluate("[...document.querySelectorAll('.media-menu:popover-open [role=menuitem]')].find(item => item.textContent.trim()==='Video').click()");
   await waitFor("!!document.querySelector('dialog[aria-label=\"Choose video\"][open]')");
   await waitFor(`!!document.querySelector('dialog[open] button[aria-label="${videoName}"]')`);
@@ -323,6 +327,12 @@ try {
     await evaluate(`(() => {const doc=${frameDoc},root=doc.querySelector('.block-content'),node=root.querySelector('p:last-of-type');root.focus();const range=doc.createRange();range.selectNodeContents(node);const selection=doc.defaultView.getSelection();selection.removeAllRanges();selection.addRange(range);})()`);
     await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
     assert.equal(await evaluate(`${frameDoc}.activeElement === ${frameDoc}.querySelector('.block-content')`), true, await evaluate(`JSON.stringify({editable:${frameDoc}.querySelector('.block-content')?.contentEditable,errors:[...${frameDoc}.querySelectorAll('[role=alert]')].map(el=>el.textContent),modals:[...${frameDoc}.querySelectorAll(':modal')].map(el=>el.outerHTML.slice(0,200))})`));
+    if (choice === 'image') {
+      await openMediaMenu(frameDoc);
+      await cdp('Input.dispatchKeyEvent', {type:'keyDown',key:'Escape',windowsVirtualKeyCode:27});
+      await cdp('Input.dispatchKeyEvent', {type:'keyUp',key:'Escape',windowsVirtualKeyCode:27});
+      await waitFor(`!${frameDoc}.querySelector('.media-menu:popover-open')`);
+    }
     for (const character of `/${choice}`) await cdp('Input.insertText', { text: character });
     try { await waitFor(`!![...${frameDoc}.querySelectorAll('.block-slash [role=option]')].find(option=>option.textContent.toLowerCase()===${JSON.stringify(choice)})`); }
     catch (error) { throw new Error(`${error.message}\n${await evaluate(`JSON.stringify({text:${frameDoc}.querySelector('.block-content')?.textContent,active:${frameDoc}.activeElement?.outerHTML.slice(0,200),menu:${frameDoc}.querySelector('.block-slash')?.outerHTML,selection:${frameDoc}.defaultView.getSelection()?.anchorNode?.parentElement?.outerHTML.slice(0,200)})`)}`); }
