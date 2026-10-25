@@ -77,10 +77,11 @@ try {
           window.stockSaved = JSON.parse(args[1].body);
           return new Response(null, { status: 204 });
         }
-        if (url.pathname === '/rigel/api/local/media') {
+        if (url.pathname === '/rigel/api/local/media' && args[1]?.method === 'PUT') return new Response(null, { status: 204 });
+        if (url.pathname === '/rigel/api/local/media' && args[1]?.method === 'POST') {
           window.stockUploaded = args[1].body instanceof Blob;
           window.stockUploadCount = (window.stockUploadCount || 0) + 1;
-          return Response.json({ url: '/rigel-media/' + (window.stockUploadCount === 1 ? 'a' : 'b').repeat(64) + '.png' });
+          return Response.json({ url: '/rigel-media/' + (window.stockUploadCount === 1 ? '00000000-0000-4000-8000-000000000001' : '00000000-0000-4000-8000-000000000002') + '.png' });
         }
         if (url.pathname === '/test-photo.png') return new Response('test image', { headers: { 'Content-Type': 'image/png' } });
         if (url.hostname === 'images.pexels.com' || (url.hostname === 'pixabay.com' && url.pathname.startsWith('/get/'))) {
@@ -471,9 +472,11 @@ try {
   await evaluate("[...document.querySelectorAll('.tabs button')].find(b => b.textContent === 'picsum').click()");
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.search-row button')).backgroundColor"), "rgb(0, 90, 163)");
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.search-row button')).color"), "rgb(255, 255, 255)");
-  await evaluate("[...document.querySelectorAll('.tabs button')].find(b => b.textContent === 'pexels').click()");
-  await waitFor("document.querySelector('[role=alert]')?.textContent.includes('API key')");
+  assert.equal(await evaluate("!!document.querySelector('.tabs [data-source=pexels]')"), false, 'Unconfigured stock providers are hidden');
+  await evaluate("document.querySelector('.image-dialog .media-head .close').click()");
   await evaluate("window.stockTestMode = true; localStorage.setItem('rigelcms.keys', JSON.stringify({pexels:'test-key',pixabay:'test-key',unsplash:'test-key'}))");
+  await evaluate("document.querySelector('.image-field button').click()");
+  await waitFor("!!document.querySelector('.tabs [data-source=pexels]')");
   const providerTab = (source) => evaluate(`[...document.querySelectorAll('.tabs button')].find(b => b.textContent === ${JSON.stringify(source)}).click()`);
   for (const source of ["pexels", "pixabay", "unsplash"]) {
     await providerTab(source);
@@ -493,7 +496,7 @@ try {
     await evaluate("document.querySelector('.save-button').click()");
     await waitFor("!!window.stockSaved");
     const chosen = await evaluate("window.stockSaved.values.test.testImage");
-    assert.equal(chosen, source === "unsplash" ? "https://images.unsplash.com/test-photo" : `/rigel-media/${(source === "pexels" ? "a" : "b").repeat(64)}.png`);
+    assert.equal(chosen, source === "unsplash" ? "https://images.unsplash.com/test-photo" : `/rigel-media/${source === "pexels" ? "00000000-0000-4000-8000-000000000001" : "00000000-0000-4000-8000-000000000002"}.png`);
     assert.equal(await evaluate(source === "unsplash" ? "window.stockTracked" : "window.stockUploaded"), true);
     await evaluate("window.stockSaved = null; document.querySelector('.image-field button').click()");
     await waitFor("!!document.querySelector('.tabs')");

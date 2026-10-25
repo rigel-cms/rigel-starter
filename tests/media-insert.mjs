@@ -2,20 +2,21 @@ import "./local-only.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { mediaFixtures } from './media-fixtures.mjs';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 const url = process.env.RIGEL_URL || "http://127.0.0.1:4321/rigel/";
 const file = "src/content/news/launch-week.json";
 const original = await readFile(file);
 await mkdir("_temp", { recursive: true });
-const videoName = `video-picker-${randomUUID()}.mp4`;
+const videoName = `${randomUUID()}.mp4`;
 const videoUrl = `/rigel-media/${videoName}`;
+const originalMedia = new Set((await readdir('public/rigel-media')).map(name => '/rigel-media/' + name));
 await writeFile(`public${videoUrl}`, mediaFixtures.find(asset => asset.type === 'video/mp4').bytes, {flag:'wx'});
 const videoBytes = mediaFixtures.find(asset => asset.type === 'video/mp4').bytes;
-const uploadedUrl = `/rigel-media/${createHash('sha256').update(videoBytes).digest('hex')}.mp4`;
-const originalUpload = await readFile(`public${uploadedUrl}`).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
+let uploadedUrl;
+const uploads = [];
 const sidecarPath = 'public/rigel-media/.rigel-media.json';
 const originalSidecar = await readFile(sidecarPath).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
 const profile = await mkdtemp(`${process.cwd()}/_temp/media-insert-`);
@@ -34,6 +35,7 @@ try {
     const result = JSON.parse(data), request = pending.get(result.id);
     if (request) { pending.delete(result.id); result.error ? request.reject(new Error(result.error.message)) : request.resolve(result.result); }
     if (result.method === "Runtime.exceptionThrown") errors.push(result.params.exceptionDetails.exception?.description ?? result.params.exceptionDetails.text);
+    if (result.method === 'Runtime.bindingCalled' && result.params.name === 'recordMediaUpload') uploads.push(JSON.parse(result.params.payload).url);
   });
   function send(method, params = {}, sessionId) {
     return new Promise((resolve, reject) => {
@@ -46,6 +48,15 @@ try {
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
   const cdp = (method, params) => send(method, params, sessionId);
   await cdp("Runtime.enable"); await cdp("Page.enable");
+  await cdp('Runtime.addBinding', {name:'recordMediaUpload'});
+  await cdp('Page.addScriptToEvaluateOnNewDocument', {source:`
+    const fetchOriginal = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await fetchOriginal(...args);
+      if (args[0] === '/rigel/api/local/media' && args[1]?.method === 'POST' && response.ok) window.recordMediaUpload(JSON.stringify(await response.clone().json()));
+      return response;
+    };
+  `});
   const evaluate = async expression => {
     const result = await cdp("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? "Browser evaluation failed");
@@ -161,11 +172,13 @@ try {
   const uploadVideo = async doc => {
     const disk = await readFile(file, 'utf8');
     for (const confirm of [false, true]) {
+      const uploadCount = uploads.length;
       await mouseClick(doc, '.block-content figure.media-video [data-rigel-edit-video]');
       await waitFor(`!!${doc}.querySelector('dialog[open] [data-source=upload]')`);
       await mouseClick(doc, 'dialog[open] [data-source=upload]');
       await waitFor(`!!${doc}.querySelector('dialog[open] input[type=file]')`);
       assert.equal(await evaluate(`${doc}.querySelector('dialog[open] input[type=file]').accept`), '.mp4,.webm,.mov');
+      assert.equal(await evaluate(`(() => {const input=${doc}.querySelector('dialog[open] input[type=file]'),label=input.parentElement.querySelector(':scope > span');return !!label && input.getBoundingClientRect().top-label.getBoundingClientRect().bottom>=6;})()`), true, 'Video upload reuses shared field spacing in sidebar and inline');
       const input = await cdp('Runtime.evaluate', {expression:`${doc}.querySelector('dialog[open] input[type=file]')`});
       await cdp('DOM.setFileInputFiles', {objectId:input.result.objectId, files:[`${process.cwd()}/public${videoUrl}`]});
       await waitFor(`!!${doc}.querySelector('dialog[open] video[src^="blob:"]')`);
@@ -175,10 +188,16 @@ try {
       await mouseClick(doc, confirm ? 'dialog[open] .media-button-actions .primary' : 'dialog[open] .close');
       await waitFor(`!${doc}.querySelector('dialog[open]')`);
       if (confirm) {
+        assert.equal(uploads.length, uploadCount + 1, 'Confirmation uploads exactly one file');
+        const previousUrl = uploadedUrl;
+        uploadedUrl = uploads.at(-1);
+        assert.match(uploadedUrl, /^\/rigel-media\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.mp4$/);
+        assert.equal(originalMedia.has(uploadedUrl), false, 'Upload never reuses an original user file');
+        if (previousUrl) assert.notEqual(uploadedUrl, previousUrl, 'Reuploading identical bytes creates a fresh UUID filename');
         assert.deepEqual(await readFile(`public${uploadedUrl}`), videoBytes, 'Actual uploaded video bytes are preserved');
         await waitFor(`${doc}.querySelector('.block-content figure.media-video video').getAttribute('src')===${JSON.stringify(uploadedUrl)}`);
-      } else if (!originalUpload && doc === 'document') {
-        assert.equal(await readFile(`public${uploadedUrl}`).then(() => true, error => { if(error.code!=='ENOENT')throw error; return false; }), false, 'Cancelling never uploads');
+      } else {
+        assert.equal(uploads.length, uploadCount, 'Cancelling never uploads');
       }
       assert.equal(await readFile(file, 'utf8'), disk, 'Uploading media does not save article content');
       await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
@@ -374,7 +393,7 @@ try {
   socket?.close();
   await (await import("node:fs/promises")).writeFile(file, original);
   await rm(`public${videoUrl}`, {force:true});
-  if (!originalUpload) await rm(`public${uploadedUrl}`, {force:true});
+  for (const asset of uploads) if (!originalMedia.has(asset)) await rm(`public${asset}`, {force:true});
   if (originalSidecar) await writeFile(sidecarPath, originalSidecar); else await rm(sidecarPath, {force:true});
   chrome.kill();
   await once(chrome, "exit").catch(() => {});
