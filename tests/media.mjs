@@ -236,6 +236,7 @@ try {
   await mediaButton('Grid view');
   console.log('PASS: filesystem metadata, combined format/month/search, no matches/reset, grid/list filters and selection, narrow list/toolbar');
   assert.deepEqual(await evaluate("[...document.querySelector('select[aria-label=\\\"Media type\\\"]').options].map(o=>o.text)"), ['All media items','Images','Audio','Video','Documents','Spreadsheets','Archives','Other']);
+  const renamedAssets = new Map();
   for (const fixture of mediaFixtures) {
     const expectedURL = '/rigel-media/' + createHash('sha256').update(fixture.bytes).digest('hex') + '.' + fixture.name.split('.').pop();
     if (!originalAssets.has(expectedURL)) created.add(expectedURL);
@@ -268,7 +269,38 @@ try {
     await click('.media-file');
     await waitFor("!!document.querySelector('.media-selection a[download]')");
     assert.equal(await evaluate("document.querySelector('.media-selection a[download]').getAttribute('href')"),expectedURL);
+    if (fixture.category === 'Video') {
+      await waitFor("document.querySelector('.media-selection video')?.readyState>=2");
+      assert.equal(await evaluate("document.querySelector('.media-selection video').controls"), true, 'Metadata editor has a playable video');
+      await evaluate("document.querySelector('.media-selection video').play()");
+      await waitFor("document.querySelector('.media-selection video').currentTime>0");
+      await evaluate("document.querySelector('.media-selection video').pause()");
+      const previousTheme = await evaluate("document.documentElement.dataset.theme || ''");
+      for (const width of [1440,390]) for (const theme of ['light','dark']) {
+        await cdp('Emulation.setDeviceMetricsOverride', {width,height:1000,deviceScaleFactor:1,mobile:false});
+        await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+        assert.equal(await evaluate("(() => {const video=document.querySelector('.media-preview video').getBoundingClientRect(),panel=document.querySelector('.media-preview').getBoundingClientRect();return video.left>=panel.left && video.right<=panel.right+1 && document.documentElement.scrollWidth<=innerWidth;})()"), true, 'Video preview fits its container without assuming a ratio');
+        await writeFile(`_temp/video-metadata-${width}-${theme}.png`, Buffer.from((await cdp('Page.captureScreenshot', {format:'png'})).data, 'base64'));
+      }
+      await cdp('Emulation.clearDeviceMetricsOverride');
+      await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(previousTheme)}`);
+      await evaluate(`{const input=document.querySelector('[aria-label="Media display name"]');input.value='Fixture movie without extension';input.dispatchEvent(new Event('input',{bubbles:true}));}`);
+      await uploadButton('Save');
+      await waitFor("[...document.querySelectorAll('.media-selection p')].some(p=>p.textContent.trim()==='Metadata saved.')");
+      assert.equal((await readSidecar())[expectedURL].name, 'Fixture movie without extension');
+      renamedAssets.set(expectedURL, 'Fixture movie without extension');
+      assert.deepEqual(await readFile('public'+expectedURL),fixture.bytes, 'Renaming leaves the video bytes untouched');
+    }
     await uploadButton('Cancel');
+    if (fixture.category === 'Video') {
+      await mediaControl('Search media', 'Fixture movie without extension', 'input');
+      await waitFor("document.querySelectorAll('.media-table tbody tr').length===1");
+      await mediaButton('Grid view');
+      await waitFor("!!document.querySelector('.media-library .thumb[aria-label=\"Fixture movie without extension\"]')");
+      await waitFor("document.querySelector('.media-library .thumb video')?.getVideoPlaybackQuality().totalVideoFrames>0");
+      assert.deepEqual(await evaluate("(() => {const video=document.querySelector('.media-library .thumb video');return [video.muted,video.controls,video.paused,video.videoWidth>0];})()"), [true,false,true,true], 'Renamed video stays in Video filter with a decoded, silent, nonplaying frame preview');
+      await writeFile('_temp/video-library-frame.png', Buffer.from((await cdp('Page.captureScreenshot', {format:'png'})).data, 'base64'));
+    }
     await mediaButton('Reset filters');
     await mediaButton('Grid view');
     console.log(`PASS: ${fixture.category} UI upload -> disk -> category/date/search grid/list -> download exact bytes and safe headers`);
@@ -450,7 +482,7 @@ try {
   await waitFor("!window.mediaReloadMarker && !!document.querySelector('#nav-media')");
   await click('#nav-media');
   for (const asset of [...originalAssets.keys(), ...created]) {
-    const name = (baseline.assets ?? baseline.images).find(item => item.url === asset)?.name ?? decodeURIComponent(asset.split("/").pop());
+    const name = renamedAssets.get(asset) ?? (baseline.assets ?? baseline.images).find(item => item.url === asset)?.name ?? decodeURIComponent(asset.split("/").pop());
     await waitFor(`!![...document.querySelectorAll(".media-library .thumb, .media-library .media-file")].find(b => b.dataset.tooltip === ${JSON.stringify(name)} || b.textContent.trim() === ${JSON.stringify(name)})`);
   }
   for (const [asset, bytes] of originalAssets) assert.deepEqual(await readFile('public' + asset), bytes);
