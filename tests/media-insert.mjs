@@ -4,13 +4,20 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { mediaFixtures } from './media-fixtures.mjs';
+import { randomUUID, createHash } from 'node:crypto';
 
 const url = process.env.RIGEL_URL || "http://127.0.0.1:4321/rigel/";
 const file = "src/content/news/launch-week.json";
 const original = await readFile(file);
 await mkdir("_temp", { recursive: true });
-await writeFile('_temp/media-edit.mp4', mediaFixtures.find(asset => asset.type === 'video/mp4').bytes);
-const videoUrl = `/@fs/${process.cwd()}/_temp/media-edit.mp4`;
+const videoName = `video-picker-${randomUUID()}.mp4`;
+const videoUrl = `/rigel-media/${videoName}`;
+await writeFile(`public${videoUrl}`, mediaFixtures.find(asset => asset.type === 'video/mp4').bytes, {flag:'wx'});
+const videoBytes = mediaFixtures.find(asset => asset.type === 'video/mp4').bytes;
+const uploadedUrl = `/rigel-media/${createHash('sha256').update(videoBytes).digest('hex')}.mp4`;
+const originalUpload = await readFile(`public${uploadedUrl}`).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
+const sidecarPath = 'public/rigel-media/.rigel-media.json';
+const originalSidecar = await readFile(sidecarPath).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
 const profile = await mkdtemp(`${process.cwd()}/_temp/media-insert-`);
 const chrome = spawn(process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", ["--headless=new", "--no-first-run", "--no-default-browser-check", "--window-size=1440,1000", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
 let socket;
@@ -64,7 +71,7 @@ try {
     assert.equal(await evaluate("document.querySelector('.block-content figure.media-embed figcaption').textContent"), 'YouTube · Rick Astley - Never Gonna Give You Up (Rickroll)');
   };
   const mouseClick = async (doc, selector) => {
-      const point = await evaluate(`(() => {const el=${doc}.querySelector(${JSON.stringify(selector)});el.scrollIntoView({block:'center'});const rect=el.getBoundingClientRect(),frame=${doc}.defaultView.frameElement,box=frame?.getBoundingClientRect(),scale=frame ? box.width/frame.clientWidth : 1;return {x:(box?.left??0)+(rect.left+rect.width/2)*scale,y:(box?.top??0)+(rect.top+rect.height/2)*scale};})()`);
+      const point = await evaluate(`(async () => {const el=${doc}.querySelector(${JSON.stringify(selector)});el.scrollIntoView({block:'center'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));const rect=el.getBoundingClientRect(),frame=${doc}.defaultView.frameElement,box=frame?.getBoundingClientRect(),scale=frame ? box.width/frame.clientWidth : 1;return {x:(box?.left??0)+(rect.left+rect.width/2)*scale,y:(box?.top??0)+(rect.top+rect.height/2)*scale};})()`);
       await cdp('Input.dispatchMouseEvent', {type:'mousePressed',...point,button:'left',clickCount:1});
       await cdp('Input.dispatchMouseEvent', {type:'mouseReleased',...point,button:'left',clickCount:1});
   };
@@ -110,6 +117,68 @@ try {
     assert.equal(await evaluate(`${doc}.querySelectorAll(${JSON.stringify(selector)}).length`), 1, 'Editing replaces the selected video instead of duplicating it');
     assert.equal(await readFile(file, 'utf8'), disk, 'Editing does not autosave');
   };
+  const editFileVideo = async (doc, currentUrl = videoUrl) => {
+    const disk = await readFile(file, 'utf8');
+    let expectedMuted = doc !== 'document', expectedControls = doc === 'document';
+    const fill = (selector, value) => evaluate(`(() => {const field=${doc}.querySelector(${JSON.stringify(selector)});field.value=${JSON.stringify(value)};field.dispatchEvent(new field.ownerDocument.defaultView.Event('input',{bubbles:true}));})()`);
+    for (const caption of ['Fixture video edited', 'Fixture video']) {
+      await mouseClick(doc, '.block-content figure.media-video [data-rigel-edit-video]');
+      await waitFor(`!!${doc}.querySelector('dialog[open][aria-label="Choose video"]')`);
+      assert.equal(await evaluate(`${doc}.querySelector('dialog[open] .tabs button').textContent`), 'library', 'Video editing opens the existing library');
+      assert.equal(await evaluate(`!!${doc}.querySelector('dialog[open] input[type=file]')`), false);
+      await writeFile(`_temp/video-library-${doc === 'document' ? 'sidebar' : 'inline'}.png`, Buffer.from((await cdp('Page.captureScreenshot', {format:'png'})).data, 'base64'));
+      await mouseClick(doc, 'dialog[open] [data-source=url]');
+      assert.equal(await evaluate(`${doc}.querySelector('dialog[open] input[type=url]').value`), currentUrl, 'Video edit retains its URL');
+      await fill('dialog[open] input[type=url]', 'https://example.com/not-video.pdf');
+      await mouseClick(doc, 'dialog[open] .primary');
+      await waitFor(`!!${doc}.querySelector('dialog[open] [role=alert]')`);
+      assert.equal(await evaluate(`!!${doc}.querySelector('dialog[open] video')`), false, 'Non-video URLs are rejected');
+      await fill('dialog[open] input[type=url]', currentUrl);
+      await mouseClick(doc, 'dialog[open] .primary');
+      await waitFor(`!!${doc}.querySelector('dialog[open] video')`);
+      assert.deepEqual(await evaluate(`[...${doc}.querySelectorAll('dialog[open] input[role=switch]')].map(input=>input.checked)`), [expectedMuted, expectedControls], 'Editing restores video playback settings');
+      await mouseClick(doc, 'dialog[open] [aria-label="Muted"]');
+      await mouseClick(doc, 'dialog[open] [aria-label="Show controls"]');
+      expectedMuted = !expectedMuted; expectedControls = !expectedControls;
+      await waitFor(`(() => {const video=${doc}.querySelector('dialog[open] video');return video.muted===${expectedMuted} && video.controls===${expectedControls};})()`);
+      assert.deepEqual(await evaluate(`(() => {const video=${doc}.querySelector('dialog[open] video');return [video.muted,video.controls];})()`), [expectedMuted, expectedControls], 'Preview reflects both switches');
+      await fill('dialog[open] [aria-label="Video caption"]', caption);
+      await mouseClick(doc, 'dialog[open] .media-button-actions .primary');
+      try { await waitFor(`!${doc}.querySelector('dialog[open]') && ${doc}.querySelector('.block-content figure.media-video figcaption')?.textContent===${JSON.stringify(caption)}`); }
+      catch(error) { throw new Error(`${error.message}\n${await evaluate(`JSON.stringify({dialog:${doc}.querySelector('dialog[open]')?.textContent,caption:${doc}.querySelector('.media-video figcaption')?.textContent,errors:[...${doc}.querySelectorAll('[role=alert]')].map(el=>el.textContent)})`)}`); }
+      assert.deepEqual(await evaluate(`(() => {const video=${doc}.querySelector('.block-content figure.media-video video');return [video.muted,video.controls];})()`), [expectedMuted, expectedControls], 'Editor retains playback settings');
+      await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+    }
+    assert.equal(await evaluate(`${doc}.querySelectorAll('.block-content figure.media-video').length`), 1, 'Library picker updates the existing video');
+    assert.equal(await readFile(file, 'utf8'), disk, 'Video library never autosaves');
+  };
+  const uploadVideo = async doc => {
+    const disk = await readFile(file, 'utf8');
+    for (const confirm of [false, true]) {
+      await mouseClick(doc, '.block-content figure.media-video [data-rigel-edit-video]');
+      await waitFor(`!!${doc}.querySelector('dialog[open] [data-source=upload]')`);
+      await mouseClick(doc, 'dialog[open] [data-source=upload]');
+      await waitFor(`!!${doc}.querySelector('dialog[open] input[type=file]')`);
+      assert.equal(await evaluate(`${doc}.querySelector('dialog[open] input[type=file]').accept`), '.mp4,.webm,.mov');
+      const input = await cdp('Runtime.evaluate', {expression:`${doc}.querySelector('dialog[open] input[type=file]')`});
+      await cdp('DOM.setFileInputFiles', {objectId:input.result.objectId, files:[`${process.cwd()}/public${videoUrl}`]});
+      await waitFor(`!!${doc}.querySelector('dialog[open] video[src^="blob:"]')`);
+      if (!(await evaluate(`${doc}.querySelector('dialog[open] [aria-label="Muted"]').checked`))) await mouseClick(doc, 'dialog[open] [aria-label="Muted"]');
+      if (await evaluate(`${doc}.querySelector('dialog[open] [aria-label="Show controls"]').checked`)) await mouseClick(doc, 'dialog[open] [aria-label="Show controls"]');
+      await writeFile(`_temp/video-upload-${doc === 'document' ? 'sidebar' : 'inline'}.png`, Buffer.from((await cdp('Page.captureScreenshot', {format:'png'})).data, 'base64'));
+      await mouseClick(doc, confirm ? 'dialog[open] .media-button-actions .primary' : 'dialog[open] .close');
+      await waitFor(`!${doc}.querySelector('dialog[open]')`);
+      if (confirm) {
+        assert.deepEqual(await readFile(`public${uploadedUrl}`), videoBytes, 'Actual uploaded video bytes are preserved');
+        await waitFor(`${doc}.querySelector('.block-content figure.media-video video').getAttribute('src')===${JSON.stringify(uploadedUrl)}`);
+      } else if (!originalUpload && doc === 'document') {
+        assert.equal(await readFile(`public${uploadedUrl}`).then(() => true, error => { if(error.code!=='ENOENT')throw error; return false; }), false, 'Cancelling never uploads');
+      }
+      assert.equal(await readFile(file, 'utf8'), disk, 'Uploading media does not save article content');
+      await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+    }
+    assert.equal(await evaluate(`${doc}.querySelectorAll('.block-content figure.media-video').length`), 1, 'Upload replaces the selected video');
+  };
   const checkActions = async () => {
     assert.equal(await evaluate("(() => {const dialog=document.querySelector('dialog.media-insert'),rect=dialog.getBoundingClientRect(),style=getComputedStyle(dialog);return rect.width===innerWidth && rect.height===innerHeight && style.borderTopWidth==='0px' && style.paddingTop==='16px';})()"), true, 'Native dialog uses the shared full-viewport reset');
     assert.equal(await evaluate("getComputedStyle(document.querySelector('dialog.media-insert .media-button-actions')).borderTopWidth"), '1px', 'Footer uses the shared divider');
@@ -139,8 +208,8 @@ try {
   };
   for (const choice of ['image', 'video', 'youtube', 'vimeo']) {
     await slashMedia(choice);
-    await waitFor(choice === 'image' ? "!!document.querySelector('dialog.image-dialog[open]')" : "!!document.querySelector('dialog.media-insert[open]')");
-    assert.equal(await evaluate("document.querySelector('dialog[open] h2').textContent"), choice === 'image' ? 'Choose image' : choice === 'video' ? 'Add video' : `Add ${choice === 'youtube' ? 'YouTube' : 'Vimeo'} video`);
+    await waitFor(choice === 'image' || choice === 'video' ? "!!document.querySelector('dialog.image-dialog[open]')" : "!!document.querySelector('dialog.media-insert[open]')");
+    assert.equal(await evaluate("document.querySelector('dialog[open] h2').textContent"), choice === 'image' ? 'Choose image' : choice === 'video' ? 'Choose video' : `Add ${choice === 'youtube' ? 'YouTube' : 'Vimeo'} video`);
     assert.ok((await readFile(file)).equals(original), 'Slash commands never autosave');
     await click('dialog[open] .close');
     await waitFor("!document.querySelector('dialog[open]')");
@@ -183,16 +252,31 @@ try {
   await click('.body-toolbar [data-media-trigger]');
   await waitFor("!!document.querySelector('.media-menu:popover-open')");
   await evaluate("[...document.querySelectorAll('.media-menu:popover-open [role=menuitem]')].find(item => item.textContent.trim()==='Video').click()");
-  await waitFor("!!document.querySelector('dialog.media-insert[open]')");
-  await type('dialog.media-insert input[type=text]', videoUrl);
-  await type('dialog.media-insert label:nth-of-type(3) input', 'Fixture video');
-  await click('dialog.media-insert .primary');
-  await waitFor("!!document.querySelector('.block-content figure.media-video')");
-  await editVideo('document', '.block-content figure.media-video', videoUrl, 'Fixture video');
+  await waitFor("!!document.querySelector('dialog[aria-label=\"Choose video\"][open]')");
+  await waitFor(`!!document.querySelector('dialog[open] button[aria-label="${videoName}"]')`);
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('dialog[open] .tabs button')].map(button=>button.textContent)"), ['library','upload','url','YouTube','Vimeo']);
+  await evaluate("window.videoSourceDialog=document.querySelector('dialog[open]')");
+  for (const source of ['youtube', 'vimeo', 'library']) {
+    await mouseClick('document', `dialog[open] [data-source=${source}]`);
+    assert.equal(await evaluate("window.videoSourceDialog===document.querySelector('dialog[open]') && document.querySelectorAll('dialog[open]').length===1"), true, 'All video sources reuse one dialog');
+  }
+  await waitFor(`!!document.querySelector('dialog[open] button[aria-label="${videoName}"]')`);
+  assert.equal(await evaluate("!!document.querySelector('dialog[open] input[type=file], dialog[open] .thumb img')"), false, 'Video picker has no file browse or image results');
+  await mouseClick('document', `dialog[open] button[aria-label="${videoName}"]`);
+  await waitFor("!!document.querySelector('dialog[open] video')");
+  await type('dialog[open] [aria-label="Video caption"]', 'Fixture video');
+  await mouseClick('document', 'dialog[open] .media-button-actions .primary');
+  try { await waitFor("!!document.querySelector('.block-content figure.media-video')"); }
+  catch(error) { throw new Error(`${error.message}\n${await evaluate("JSON.stringify({dialog:document.querySelector('dialog[open]')?.textContent,body:document.querySelector('.block-content')?.textContent,errors:[...document.querySelectorAll('[role=alert]')].map(el=>el.textContent)})")}`); }
+  await editFileVideo('document');
+  await uploadVideo('document');
 
   await click(".save-button");
   await waitFor("document.querySelector('.save-status')?.textContent.trim() === 'Saved'");
   const saved = JSON.parse(await readFile(file, "utf8"));
+  const savedVideo = saved.body.root.children.find(child=>child.type==='video');
+  assert.equal(savedVideo.muted, true, 'Muted saves to disk');
+  assert.equal(savedVideo.controls, false, 'Controls setting saves to disk');
   const node = saved.body.root.children.find(child => child.type === "embed");
   assert.equal(saved.body.root.children[0].type, 'embed', 'Slash insertion replaces the command paragraph in place');
   assert.equal(JSON.stringify(saved.body).includes('/youtube'), false, 'Slash command text is not saved');
@@ -200,6 +284,10 @@ try {
   const publicUrl = new URL(`/news/${saved.frontmatter.slug || 'launch-week'}/`, url).href;
   await waitFor(`(async () => (await (await fetch(${JSON.stringify(publicUrl)})).text()).includes('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0'))()`);
   await waitFor(`(async () => (await (await fetch(${JSON.stringify(publicUrl)})).text()).includes('https://player.vimeo.com/video/861680818?dnt=1'))()`);
+  const publicHtml = await evaluate(`(async () => (await (await fetch(${JSON.stringify(publicUrl)})).text()))()`);
+  const publicVideo = publicHtml.match(/<video\b[^>]*>/)[0];
+  assert.match(publicVideo, /\bmuted\b/);
+  assert.doesNotMatch(publicVideo, /\bcontrols\b/);
 
   await navigate(url);
   await open("news", "launch-week");
@@ -219,26 +307,29 @@ try {
   await click('.settings-head .close');
   await waitFor("document.querySelector('.canvas-stage')?.dataset.ready==='true'");
   const frameDoc = "document.querySelector('.visual-editor iframe').contentDocument";
+  assert.deepEqual(await evaluate(`(() => {const video=${frameDoc}.querySelector('figure.media-video video');return [video.defaultMuted,video.controls];})()`), [true, false], 'Reloaded website preview retains playback settings');
   assert.equal(await evaluate(`${frameDoc}.querySelector('figure[data-rigel-embed=youtube] [data-rigel-edit-video]').hidden`), false, 'Reloaded preview offers editing before entering the block editor');
   await evaluate(`${frameDoc}.querySelector('figure[data-rigel-embed=youtube]').scrollIntoView({block:'center'})`);
   await waitFor(`${frameDoc}.querySelector('figure[data-rigel-embed=youtube] img').complete`);
   await writeFile('_temp/embed-preview.png', Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   await editVideo(frameDoc, 'figure[data-rigel-embed=youtube]', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Rick Astley - Never Gonna Give You Up (Rickroll)');
   await editVideo(frameDoc, '.block-content figure[data-rigel-embed=vimeo]', 'https://vimeo.com/861680818', 'The Rolling Stones - Angry');
-  await editVideo(frameDoc, '.block-content figure.media-video', videoUrl, 'Fixture video');
-  await evaluate(`${frameDoc}.querySelector('.block-content p').click()`);
+  await editFileVideo(frameDoc, uploadedUrl);
+  await uploadVideo(frameDoc);
+  assert.equal(await evaluate(`${frameDoc}.querySelector('.block-content').isContentEditable`), true, 'Video picker leaves the editor editable');
   for (const choice of ['image', 'video', 'youtube', 'vimeo']) {
     await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
-    await mouseClick(frameDoc, '.block-content p');
-    await evaluate(`(() => {const doc=${frameDoc},root=doc.querySelector('.block-content'),node=root.querySelector('p');root.focus();const range=doc.createRange();range.selectNodeContents(node);const selection=doc.defaultView.getSelection();selection.removeAllRanges();selection.addRange(range);})()`);
+    await mouseClick(frameDoc, '.block-content p:last-of-type');
+    await evaluate(`(() => {const doc=${frameDoc},root=doc.querySelector('.block-content'),node=root.querySelector('p:last-of-type');root.focus();const range=doc.createRange();range.selectNodeContents(node);const selection=doc.defaultView.getSelection();selection.removeAllRanges();selection.addRange(range);})()`);
     await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+    assert.equal(await evaluate(`${frameDoc}.activeElement === ${frameDoc}.querySelector('.block-content')`), true, await evaluate(`JSON.stringify({editable:${frameDoc}.querySelector('.block-content')?.contentEditable,errors:[...${frameDoc}.querySelectorAll('[role=alert]')].map(el=>el.textContent),modals:[...${frameDoc}.querySelectorAll(':modal')].map(el=>el.outerHTML.slice(0,200))})`));
     for (const character of `/${choice}`) await cdp('Input.insertText', { text: character });
     try { await waitFor(`!![...${frameDoc}.querySelectorAll('.block-slash [role=option]')].find(option=>option.textContent.toLowerCase()===${JSON.stringify(choice)})`); }
     catch (error) { throw new Error(`${error.message}\n${await evaluate(`JSON.stringify({text:${frameDoc}.querySelector('.block-content')?.textContent,active:${frameDoc}.activeElement?.outerHTML.slice(0,200),menu:${frameDoc}.querySelector('.block-slash')?.outerHTML,selection:${frameDoc}.defaultView.getSelection()?.anchorNode?.parentElement?.outerHTML.slice(0,200)})`)}`); }
     await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', windowsVirtualKeyCode: 13 });
     await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', windowsVirtualKeyCode: 13 });
     await waitFor(`!!${frameDoc}.querySelector('dialog[open]')`);
-    assert.equal(await evaluate(`${frameDoc}.querySelector('dialog[open] h2').textContent`), choice === 'image' ? 'Choose image' : choice === 'video' ? 'Add video' : `Add ${choice === 'youtube' ? 'YouTube' : 'Vimeo'} video`);
+    assert.equal(await evaluate(`${frameDoc}.querySelector('dialog[open] h2').textContent`), choice === 'image' ? 'Choose image' : choice === 'video' ? 'Choose video' : `Add ${choice === 'youtube' ? 'YouTube' : 'Vimeo'} video`);
     await evaluate(`${frameDoc}.querySelector('dialog[open] .close').click()`);
     await waitFor(`!${frameDoc}.querySelector('dialog[open]')`);
   }
@@ -272,6 +363,9 @@ try {
 } finally {
   socket?.close();
   await (await import("node:fs/promises")).writeFile(file, original);
+  await rm(`public${videoUrl}`, {force:true});
+  if (!originalUpload) await rm(`public${uploadedUrl}`, {force:true});
+  if (originalSidecar) await writeFile(sidecarPath, originalSidecar); else await rm(sidecarPath, {force:true});
   chrome.kill();
   await once(chrome, "exit").catch(() => {});
   for (let attempt = 0; attempt < 5; attempt++) {
