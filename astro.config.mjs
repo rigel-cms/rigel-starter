@@ -15,6 +15,7 @@ export default defineConfig({
   integrations: [
     rigel({
       copyDir: "src/content/copy",
+      maxFileSize: 2 * 1024 * 1024,
       backend: process.env.RIGEL_GITHUB_REPO ? "github" : "local",
       repo: process.env.RIGEL_GITHUB_REPO,
       repoRoot: "",

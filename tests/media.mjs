@@ -177,6 +177,13 @@ try {
   await click('.titlebar .primary');
   await waitFor("!!document.querySelector('.image-dialog[open] input[type=file]')");
   assert.equal(await evaluate("document.activeElement.getAttribute('aria-label')"), 'Close');
+  assert.match(await evaluate("document.querySelector('.image-dialog input[type=file]').parentElement.textContent"), /2 MB maximum/);
+  await evaluate("{const input=document.querySelector('.image-dialog input[type=file]'),files=new DataTransfer();files.items.add(new File([new Uint8Array(2*1024*1024+1)],'oversized.png',{type:'image/png'}));input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));}");
+  await waitFor("document.querySelector('.image-dialog [role=alert]')?.textContent.includes('up to 2 MB')");
+  assert.equal(await evaluate("!!document.querySelector('.image-dialog .media-selection')"), false, 'Oversized files never reach upload confirmation');
+  const tooLarge = await fetch(new URL('/rigel/api/local/media',url), {method:'POST',headers:{Origin:new URL(url).origin,'Content-Type':'image/png','X-Rigel-Filename':'oversized.png'},body:new Uint8Array(2*1024*1024+1)});
+  assert.equal(tooLarge.status,413,'Real API enforces the same configured limit');
+  assert.match(await tooLarge.text(), /2 MB/);
   await cdp('Input.dispatchKeyEvent', {type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
   await cdp('Input.dispatchKeyEvent', {type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
   await waitFor("!document.querySelector('.image-dialog')");
@@ -261,6 +268,7 @@ try {
     await mediaControl('Modified month',item.modified.slice(0,7));
     await mediaControl('Search media',item.name,'input');
     await waitFor("document.querySelectorAll('.media-library .thumb').length === 1");
+    assert.equal(await evaluate("document.querySelector('.media-library .thumb .media-extension').textContent"), fixture.name.split('.').pop().toUpperCase(), 'Extension badge uses the actual file');
     assert.equal(await evaluate("!!document.querySelector('.media-library .thumb img')"),false);
     assert.equal(await evaluate("document.querySelector('.media-search').previousElementSibling.textContent.trim()"),'Reset filters');
     assert.equal(await evaluate("document.querySelector('.media-search').previousElementSibling.previousElementSibling.textContent.trim()"),'Refresh');
@@ -297,6 +305,17 @@ try {
       await waitFor("document.querySelectorAll('.media-table tbody tr').length===1");
       await mediaButton('Grid view');
       await waitFor("!!document.querySelector('.media-library .thumb[aria-label=\"Fixture movie without extension\"]')");
+      assert.equal(await evaluate("document.querySelector('.media-library .thumb .media-extension').textContent"), 'MP4', 'Display-name rename cannot change extension badge');
+      const badgeTheme = await evaluate("document.documentElement.dataset.theme || ''");
+      for (const width of [1440,390]) for (const theme of ['light','dark']) {
+        await cdp('Emulation.setDeviceMetricsOverride', {width,height:1000,deviceScaleFactor:1,mobile:false});
+        await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+        assert.equal(await evaluate("[...document.querySelectorAll('.media-library .thumb')].every(button=>{const box=button.getBoundingClientRect(),badge=button.querySelector('.media-extension'),rect=badge.getBoundingClientRect();return rect.top>=box.top && rect.top<box.top+16 && rect.right<=box.right && rect.right>box.right-16 && badge.id===button.getAttribute('aria-describedby');})"), true, 'Badges stay top-right and provide accessible descriptions');
+        assert.equal(await evaluate("getComputedStyle(document.querySelector('.media-extension')).fontSize"), '10px', 'Extension badges remain compact');
+        await writeFile(`_temp/media-badges-${width}-${theme}.png`, Buffer.from((await cdp('Page.captureScreenshot', {format:'png'})).data, 'base64'));
+      }
+      await cdp('Emulation.clearDeviceMetricsOverride');
+      await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(badgeTheme)}`);
       await waitFor("document.querySelector('.media-library .thumb video')?.getVideoPlaybackQuality().totalVideoFrames>0");
       assert.deepEqual(await evaluate("(() => {const video=document.querySelector('.media-library .thumb video');return [video.muted,video.controls,video.paused,video.videoWidth>0];})()"), [true,false,true,true], 'Renamed video stays in Video filter with a decoded, silent, nonplaying frame preview');
       await writeFile('_temp/video-library-frame.png', Buffer.from((await cdp('Page.captureScreenshot', {format:'png'})).data, 'base64'));
