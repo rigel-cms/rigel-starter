@@ -347,6 +347,10 @@ try {
     await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
     assert.equal(await evaluate(`${frameDoc}.activeElement === ${frameDoc}.querySelector('.block-content')`), true, await evaluate(`JSON.stringify({editable:${frameDoc}.querySelector('.block-content')?.contentEditable,errors:[...${frameDoc}.querySelectorAll('[role=alert]')].map(el=>el.textContent),modals:[...${frameDoc}.querySelectorAll(':modal')].map(el=>el.outerHTML.slice(0,200))})`));
     if (choice === 'image') {
+      await evaluate(`${frameDoc}.defaultView.getSelection().collapseToEnd()`);
+      await cdp('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',windowsVirtualKeyCode:13});
+      await cdp('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',windowsVirtualKeyCode:13});
+      await waitFor(`${frameDoc}.querySelector('.block-content > p:last-of-type')?.textContent==='' && !!${frameDoc}.querySelector('.body-toolbar [data-media-trigger]')`);
       await openMediaMenu(frameDoc);
       await cdp('Input.dispatchKeyEvent', {type:'keyDown',key:'Escape',windowsVirtualKeyCode:27});
       await cdp('Input.dispatchKeyEvent', {type:'keyUp',key:'Escape',windowsVirtualKeyCode:27});

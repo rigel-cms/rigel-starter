@@ -21,6 +21,15 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await cdp('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
     await cdp('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
   };
+  const selectBlock = async (selector, all = false) => {
+    await realClick(selector);
+    await evaluate(`(() => {const element=${doc}.querySelector(${JSON.stringify(selector)}),range=${doc}.createRange(),selection=${doc}.defaultView.getSelection();range.selectNodeContents(element);${all ? '' : 'range.collapse(false);'}selection.removeAllRanges();selection.addRange(range);})()`);
+    await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  };
+  const checkInsertions = async (media, table, context) => {
+    await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    assert.deepEqual(await evaluate(`['Insert media','Table'].map(label=>!!${doc}.querySelector('.body-toolbar:not([hidden]) [aria-label="'+label+'"]')?.getClientRects().length)`),[media,table],context);
+  };
   const settings = async (experience, theme) => {
     await click('.user-btn');
     await evaluate("[...document.querySelectorAll('.user-menu button')].find(button=>button.textContent.includes('Settings')).click()");
@@ -56,6 +65,8 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     assert.equal(await evaluate(`${doc}.defaultView.getComputedStyle(window.inlineBody).outlineWidth`),'0px','No form-sized outline surrounds the article');
     await waitFor(`${doc}.querySelector('.block-content > p').contains(${doc}.defaultView.getSelection()?.anchorNode)`);
     assert.equal(await evaluate("document.querySelector('.save-button').disabled"),true,'Activation does not dirty content');
+    await selectBlock('.block-content > p');
+    await checkInsertions(false,false,'A populated paragraph caret has formatting, not insertion controls');
     assert.equal(await evaluate(`${frame}.getAttribute('sandbox')`),'allow-same-origin');
     if (await evaluate('window.inlineBody.children.length<2')) {
       await evaluate(`(() => {window.inlineBody.focus();const range=${doc}.createRange();range.selectNodeContents(window.inlineBody);range.collapse(false);const selection=${doc}.defaultView.getSelection();selection.removeAllRanges();selection.addRange(range);})()`);
@@ -90,6 +101,22 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     assert.deepEqual(await evaluate(`[...window.inlineBody.children].filter((_,index)=>index!==1).map(element=>element.textContent)`),await evaluate('window.insertionNeighbors'),'Insertion leaves both neighboring blocks untouched');
     assert.equal(await evaluate(`window.inlineBody.children[1].contains(${doc}.defaultView.getSelection().anchorNode)`),true,'The new paragraph is ready to type into');
     assert.equal(await evaluate(`${doc}.querySelector('.body-toolbar [aria-label=Bold]').getAttribute('aria-pressed')`),'false','New paragraphs do not inherit text formatting');
+    await checkInsertions(true,true,'An empty paragraph caret offers media and table insertion');
+    await writeFile(`_temp/inline-toolbar-empty-${collection}.png`,Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
+    await cdp('Input.insertText',{text:'Toolbar eligibility'});
+    await waitFor(`window.inlineBody.children[1].textContent==='Toolbar eligibility'`);
+    await checkInsertions(false,false,'Typing hides insertion controls without moving the caret');
+    await writeFile(`_temp/inline-toolbar-typed-${collection}.png`,Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
+    await selectBlock('.block-content > :nth-child(2)',true);
+    await checkInsertions(false,false,'A populated text range offers no insertion controls');
+    await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Backspace',windowsVirtualKeyCode:8});
+    await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Backspace',windowsVirtualKeyCode:8});
+    await waitFor(`window.inlineBody.children[1].textContent===''`);
+    await checkInsertions(true,true,'Deleting all text restores insertion controls in a dirty document');
+    await evaluate(`(() => {const range=${doc}.createRange(),selection=${doc}.defaultView.getSelection();range.setStart(window.inlineBody.children[1],0);range.setEnd(window.inlineBody.children[2],1);selection.removeAllRanges();selection.addRange(range);})()`);
+    await checkInsertions(false,false,'A noncollapsed range anchored in an empty paragraph cannot insert');
+    await selectBlock('.block-content > :nth-child(2)');
+    await checkInsertions(true,true,'Collapsing back into the empty paragraph restores insertion');
     for (const character of 'Between article blocks') {
       const code = character===' ' ? 'Space' : `Key${character.toUpperCase()}`;
       await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:character,code,text:character});
@@ -109,7 +136,8 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await evaluate(`(() => {const root=${doc}.querySelector('.block-content');root.focus();const node=${doc}.createTreeWalker(root,NodeFilter.SHOW_TEXT).nextNode();node.parentElement.scrollIntoView({block:'center'});const range=${doc}.createRange();range.setStart(node,0);range.setEnd(node,4);const selection=${doc}.defaultView.getSelection();selection.removeAllRanges();selection.addRange(range);})()`);
     await waitFor(`!!${doc}.querySelector('.body-toolbar:not([hidden]) [aria-label=Bold]')`);
     assert.equal(await evaluate(`!!${doc}.querySelector('.body-toolbar [aria-label="Add block"]')`),false,'The floating toolbar has no duplicate plus button');
-    for (const label of ['Block type','Bold','Italic','Link','More formatting','Insert media','Table','Bulleted list','Numbered list','More actions']) {
+    await checkInsertions(false,false,'Selected copy keeps formatting controls without media or table insertion');
+    for (const label of ['Block type','Bold','Italic','Link','More formatting','Bulleted list','Numbered list','More actions']) {
       await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
       const point = await evaluate(`(() => {const frame=document.querySelector('.visual-editor iframe'),button=${doc}.querySelector('.body-toolbar button[aria-label="${label}"]'),rect=button.getBoundingClientRect(),outer=frame.getBoundingClientRect();return {x:outer.left+rect.left+rect.width/2,y:outer.top+rect.top+rect.height/2,background:${doc}.defaultView.getComputedStyle(button).backgroundColor};})()`);
       await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x,y:point.y});
@@ -159,7 +187,6 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await waitFor(`!!window.inlineBody.querySelector('a[href="https://example.com/inline-test"]')`);
     assert.equal(await evaluate(`window.inlineBody.querySelector('a[href="https://example.com/inline-test"]').textContent===window.linkSelectionText`),true,'Apply links exactly the highlighted text');
     assert.equal(await evaluate(`${doc}.defaultView.CSS.highlights.has('rigel-link-selection')`),false,'Apply clears the temporary highlight');
-    assert.deepEqual(await evaluate(`[...${doc}.querySelectorAll('.body-toolbar button')].map(button=>button.getAttribute('aria-label')).filter(Boolean).slice(-4,-1)`),['Table','Bulleted list','Numbered list'],'Table and list buttons follow the image button');
     await realClick('.body-toolbar button[aria-label="Block type"]');
     await waitFor(`!!${doc}.querySelector('.select-menu:popover-open')`);
     assert.equal(await evaluate(`[...${doc}.querySelectorAll('.select-menu:popover-open [role=option]')].some(option=>['Image','Table','Bulleted list','Numbered list'].includes(option.querySelector('span').textContent))`),false,'Dedicated image, table and list controls are absent from the block dropdown');
@@ -173,7 +200,7 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter'});
     await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter'});
     await waitFor(`${doc}.querySelector('.block-content > [data-rigel-active-block]')?.tagName==='H2'`);
-    assert.equal(await evaluate(`${doc}.querySelector('.body-toolbar [aria-label="Block type"]').title`),'Heading 2','Floating trigger identifies the current block');
+    assert.equal(await evaluate(`${doc}.querySelector('.body-toolbar [aria-label="Block type"]').dataset.tooltip`),'Heading 2','Floating trigger identifies the current block');
     await realClick('.body-toolbar button[aria-label="Block type"]');
     assert.equal(await evaluate(`[...${doc}.querySelectorAll('.select-menu:popover-open [role=option]')].every(option=>!!option.querySelector('svg'))`),true,'Floating block choices have icons');
     assert.equal(await evaluate(`${doc}.querySelector('.body-toolbar [aria-label="Block type"] svg path').getAttribute('d')===${doc}.querySelector('.select-menu:popover-open [aria-selected=true] svg path').getAttribute('d')`),true,'Floating trigger shows the selected H2 icon');
@@ -187,16 +214,29 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await waitFor(`!${doc}.querySelector('.select-menu:popover-open')`);
     await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'});
     await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'});
-    await realClick('.block-content > p');
+    await selectBlock('.block-content > p');
+    await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',windowsVirtualKeyCode:13});
+    await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',windowsVirtualKeyCode:13});
+    await checkInsertions(true,true,'Image insertion starts from an empty paragraph');
+    assert.deepEqual(await evaluate(`[...${doc}.querySelectorAll('.body-toolbar button')].map(button=>button.getAttribute('aria-label')).filter(Boolean).slice(-4,-1)`),['Table','Bulleted list','Numbered list'],'Table and list buttons follow the image button');
+    for (const label of ['Insert media','Table']) {
+      await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
+      const point = await evaluate(`(() => {const button=${doc}.querySelector('.body-toolbar button[aria-label="${label}"]'),rect=button.getBoundingClientRect(),outer=${frame}.getBoundingClientRect();return {x:outer.left+rect.left+rect.width/2,y:outer.top+rect.top+rect.height/2,background:${doc}.defaultView.getComputedStyle(button).backgroundColor};})()`);
+      await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x,y:point.y});
+      await waitFor(`${doc}.querySelector('.body-toolbar button[aria-label="${label}"]').matches(':hover') && ${doc}.defaultView.getComputedStyle(${doc}.querySelector('.body-toolbar button[aria-label="${label}"]')).backgroundColor!==${JSON.stringify(point.background)}`);
+    }
     await realClick('.body-toolbar [aria-label="Insert media"]');
     await realClick('.media-menu:popover-open [role="menuitem"]');
     await waitFor(`!!${doc}.querySelector('.image-dialog[open]')`);
     await waitFor(`!!${doc}.querySelector('.image-dialog .thumb')`);
     await realClick('.image-dialog .media-head .close');
     await waitFor(`!${doc}.querySelector('.image-dialog[open]')`);
+    await selectBlock('.block-content > p:nth-child(2)');
+    await checkInsertions(true,true,'Cancelling the picker leaves the empty insertion paragraph available');
     await realClick('.body-toolbar [aria-label="Insert media"]');
     await realClick('.media-menu:popover-open [role="menuitem"]');
     await waitFor(`!!${doc}.querySelector('.image-dialog .thumb')`);
+    await evaluate(`${doc}.querySelector('.image-dialog .thumb img').decode()`);
     await realClick('.image-dialog .thumb');
     await waitFor(`${doc}.querySelector('.image-dialog .media-selection img')?.complete`);
     await realClick('.image-dialog .media-actions .primary');
@@ -204,6 +244,7 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await evaluate(`${doc}.querySelector('.block-content figure img').decode()`);
     await realClick('.block-content figure img');
     await waitFor(`!!${doc}.querySelector('.body-toolbar:not([hidden]) [aria-label="Edit alt text"]')`);
+    await checkInsertions(false,false,'Image context keeps image editing controls without insertion triggers');
     await evaluate(`window.inlineImageSrc=${doc}.querySelector('.block-content figure img').getAttribute('src')`);
     await realClick('.body-toolbar [aria-label="Edit alt text"]');
     await waitFor(`!!${doc}.querySelector('[aria-label="Image alt text"]')`);
@@ -243,11 +284,16 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await realClick('.body-toolbar button[aria-label="Numbered list"]');
     await waitFor(`${doc}.querySelector('.block-content > [data-rigel-active-block]')?.tagName==='P'`);
     assert.equal(await evaluate(`!!window.inlineBody.querySelector('a[href="https://example.com/inline-test"]')`),true,'List toggles retain existing inline content');
+    await selectBlock('.block-content > p');
+    await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',windowsVirtualKeyCode:13});
+    await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',windowsVirtualKeyCode:13});
+    await checkInsertions(true,true,'Table insertion starts from an empty paragraph');
     await realClick('.body-toolbar button[aria-label="Table"]');
     await waitFor(`!!${doc}.querySelector('.block-table-menu:popover-open')`);
     assert.equal(await evaluate(`!!${doc}.querySelector('.block-content table')`),false,'Opening the table menu does not insert a table');
     await realClick('.block-table-menu > button');
     await waitFor(`!!${doc}.querySelector('.block-content table')`);
+    await checkInsertions(false,true,'An empty table exposes table operations, not media insertion');
     await realClick('.body-toolbar button[aria-label="Table"]');
     await waitFor(`!!${doc}.querySelector('.block-table-menu:popover-open .block-table-controls')`);
     assert.equal(await evaluate(`${doc}.querySelector('.block-table-menu input').getAttribute('role')`),'switch','Header row uses the shared toggle');
@@ -263,8 +309,16 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await realClick('.block-table-menu input');
     await waitFor(`${doc}.querySelectorAll('.block-content table th').length===4`);
     await writeFile('_temp/table-controls.png',Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
-    await realClick('.block-content table th p'); await cdp('Input.insertText',{text:'Inline table'});
+    await realClick('.block-content table th p');
+    await evaluate(`(() => {const view=${doc}.defaultView,data=new view.DataTransfer();data.setData('text/plain','Inline table');data.setData('text/html','<table><tr><td>Inline table</td></tr></table>');${doc}.querySelector('.block-content').dispatchEvent(new view.ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));})()`);
     await waitFor(`${doc}.querySelector('.block-content table').textContent.includes('Inline table')`);
+    await checkInsertions(false,true,'Pasting into a table preserves table context and operations');
+    assert.equal(await evaluate(`${doc}.querySelectorAll('.block-content table').length`),1,'Table clipboard HTML does not bypass the existing plain-text paste pipeline');
+    await selectBlock('.block-content > p');
+    await checkInsertions(false,false,'Leaving a table restores populated paragraph formatting');
+    await selectBlock('.block-content table th p');
+    await checkInsertions(false,true,'Reselecting an existing populated table restores table operations');
+    await writeFile(`_temp/inline-toolbar-table-${collection}.png`,Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
     await realClick('.body-toolbar button[aria-label="More actions"]');
     assert.equal(await evaluate(`!!${doc}.querySelector('.block-menu .custom-select')`),false,'Actions menu contains no block type chooser');
     assert.equal(await evaluate(`!!${doc}.querySelector('[aria-label="More actions"] .block-table-controls')`),false,'Table settings live under Table, not More actions');
