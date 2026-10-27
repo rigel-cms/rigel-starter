@@ -11,7 +11,7 @@ export async function checkSidebar({ cdp, evaluate, waitFor }) {
   await evaluate("document.querySelector('#nav-pages').click()");
   await waitFor("[...document.querySelectorAll('.table-link')].some(button => button.textContent.trim() === 'Home')");
   await evaluate("[...document.querySelectorAll('.table-link')].find(button => button.textContent.trim() === 'Home').click()");
-  await waitFor("!!document.querySelector('.visual-editor iframe')?.contentDocument?.querySelector('h1')");
+  await waitFor("document.querySelector('.visual-editor .canvas-stage')?.dataset.ready === 'true' && !!document.querySelector('.visual-editor iframe')?.contentDocument?.querySelector('h1')");
   await evaluate("document.querySelector('.visual-editor iframe').contentDocument.querySelector('h1').click()");
   await waitFor("document.activeElement?.matches('.schema-panel input[type=text]')");
   await evaluate("window.sidebarFrame = document.querySelector('.visual-editor iframe'); const input = document.activeElement; input.value = 'Sidebar draft stays intact'; input.dispatchEvent(new Event('input', { bubbles: true }));");
@@ -21,7 +21,7 @@ export async function checkSidebar({ cdp, evaluate, waitFor }) {
   assert.equal(await toggleAtBottom(), true, 'Expand stays above the user control in the collapsed rail');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('#nav-pages .sidebar-label')).display"), 'none');
   assert.equal(await evaluate("document.querySelector('#nav-pages').getAttribute('aria-label')"), 'Pages');
-  assert.equal(await evaluate("document.querySelector('#nav-pages').title"), 'Pages');
+  assert.equal(await evaluate("document.querySelector('#nav-pages').getAttribute('data-tooltip')"), 'Pages');
   assert.equal(await evaluate("document.querySelector('.save-button').disabled"), false);
   assert.equal(await evaluate("window.sidebarFrame === document.querySelector('.visual-editor iframe')"), true);
   assert.equal(await readFile('src/content/pages/home.json', 'utf8'), original);

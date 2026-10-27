@@ -67,6 +67,7 @@ try {
   });
   await cdp("Runtime.enable");
   await cdp("Page.enable");
+  await cdp("Page.addScriptToEvaluateOnNewDocument", { source: "if (!localStorage.getItem('rigelcms.settings')) localStorage.setItem('rigelcms.settings', JSON.stringify({ userPref: { editorExperience: 'sidebar' } }));" });
   await cdp("Network.enable");
   const evaluate = async (expression) => {
     const result = await cdp("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
@@ -103,7 +104,7 @@ try {
     await click("#nav-pages");
     await waitFor(`[...document.querySelectorAll('.table-link')].some(button => button.textContent.trim() === ${JSON.stringify(title)})`, `page row ${title}`);
     await evaluate(`[...document.querySelectorAll('.table-link')].find(button => button.textContent.trim() === ${JSON.stringify(title)}).click()`);
-    await waitFor(`!!${frame}?.contentDocument?.querySelector('[data-rigel-doc]')`, "visual canvas");
+    await waitFor(`document.querySelector('.canvas-stage')?.dataset.ready === 'true' && !!${frame}?.contentDocument?.querySelector('[data-rigel-doc]')`, "visual canvas");
   };
 
   await cdp("Page.navigate", { url });

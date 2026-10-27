@@ -67,6 +67,7 @@ try {
   await cdp("Runtime.enable");
   await cdp("Page.enable");
   await cdp("Page.addScriptToEvaluateOnNewDocument", { source: `
+    if (!localStorage.getItem('rigelcms.settings')) localStorage.setItem('rigelcms.settings', JSON.stringify({ userPref: { editorExperience: 'sidebar' } }));
     window.alert = window.confirm = window.prompt = () => { throw new Error('Native JS dialogs must not be used'); };
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
@@ -307,6 +308,7 @@ try {
   assert.equal(await evaluate("document.querySelector('.brand span').textContent"), "Rigel CMS");
   await evaluate("document.querySelector('.user-btn').click()");
   await waitFor("!!document.querySelector('.user-menu')");
+  await waitFor("(() => { const menu = document.querySelector('.user-menu').getBoundingClientRect(); return !!document.elementFromPoint(menu.left + 10, menu.top + 10)?.closest('.user-menu'); })()");
   assert.equal(await evaluate(`(() => {
     const trigger = document.querySelector('.user-btn').getBoundingClientRect();
     const menu = document.querySelector('.user-menu').getBoundingClientRect();

@@ -53,6 +53,7 @@ try {
   });
   await cdp("Runtime.enable");
   await cdp("Page.enable");
+  await cdp("Page.addScriptToEvaluateOnNewDocument", { source: "if (!localStorage.getItem('rigelcms.settings')) localStorage.setItem('rigelcms.settings', JSON.stringify({ userPref: { editorExperience: 'sidebar' } }));" });
   async function navigate(method, params) {
     let listener, timeout;
     const loaded = new Promise((resolve, reject) => {
@@ -83,11 +84,11 @@ try {
           return [...document.querySelectorAll('.rigel, .rigel *')].flatMap(el => ['', '::before', '::after'].flatMap(pseudo => {
             const style = getComputedStyle(el, pseudo || null);
             if (pseudo && ['none', 'normal'].includes(style.content)) return [];
-            const expected = !pseudo && el.classList.contains('avatar') ? '50%' : '0px';
+            const expected = !pseudo && el.matches('.avatar, .preview-spinner') ? '50%' : '0px';
             return corners.every(c => style[c] === expected) ? [] : [el.tagName + '.' + el.getAttribute('class') + pseudo];
           }));
         })()`);
-        assert.deepEqual(rounded, [], 'Only avatars may have rounded corners');
+        assert.deepEqual(rounded, [], 'Only avatars and preview spinners may have rounded corners');
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -141,7 +142,7 @@ try {
       const manifest = await response.json();
       manifest.pages.push({ slug: 'preview-fixture', label: 'Legacy preview fixture', shared: true, groups: [], values: {} });
       manifest.sidebar.push({ kind: 'link', target: { kind: 'page', slug: 'preview-fixture' } });
-      manifest.preview.pages['preview-fixture'] = '/blog/first-post/';
+      (manifest.preview.pages ??= {})['preview-fixture'] = '/blog/first-post/';
       return Response.json(manifest);
     };
   ` });
@@ -165,7 +166,7 @@ try {
   assert.equal(await evaluate("document.querySelector('.visual-live').target"), '_blank');
   assert.equal(await evaluate("(() => { const link = document.querySelector('.visual-live').getBoundingClientRect(), toggle = document.querySelector('[aria-label=\"Toggle properties panel\"]').getBoundingClientRect(); return toggle.left - link.right === parseFloat(getComputedStyle(document.documentElement).fontSize) * 0.75; })()"), true);
   assert.equal(await evaluate("!!document.querySelector('.visual-toolbar .visual-live.icon-btn') && !document.querySelector('.titlebar .visual-live') && document.querySelectorAll('.visual-live').length === 1"), true);
-  assert.equal(await evaluate("document.querySelector('.visual-live').textContent.trim() === '' && document.querySelector('.visual-live').getAttribute('aria-label') === 'View live page' && document.querySelector('.visual-live').title === 'View live page'"), true);
+  assert.equal(await evaluate("document.querySelector('.visual-live').textContent.trim() === '' && document.querySelector('.visual-live').getAttribute('aria-label') === 'Preview on website' && document.querySelector('.visual-live').dataset.tooltip === 'Preview on website'"), true);
   assert.equal(await evaluate("(() => { const link = document.querySelector('.visual-live').getBoundingClientRect(), toggle = document.querySelector('[aria-label=\"Toggle properties panel\"]').getBoundingClientRect(); return link.width === toggle.width && link.height === toggle.height; })()"), true);
   const liveStyle = () => evaluate("({ decoration: getComputedStyle(document.querySelector('.visual-live')).textDecorationLine, border: getComputedStyle(document.querySelector('.visual-live')).borderTopWidth })");
   assert.deepEqual(await liveStyle(), { decoration: 'none', border: '1px' });
@@ -177,7 +178,7 @@ try {
   await evaluate('new Promise(r=>setTimeout(r,300))');
   const beforeRequests=requests;
   const beforePreviewRequests=requestUrls.filter(value => new URL(value).pathname === '/blog/first-post/').length;
-  for(const text of ['Fast one','Fast two','UNSAVED HOST CONTACT']) await input('main input[type=text]',text);
+  for(const text of ['Fast one','Fast two','UNSAVED HOST CONTACT']) await input('[data-collection-field=title] input',text);
   await preview('UNSAVED HOST CONTACT');
   assert.equal(await evaluate(`${frame}.contentDocument===window.originalDoc && ${frame}===window.originalFrame && ${frame}.src===window.originalSrc`),true);
   assert.equal(requestUrls.filter(value => new URL(value).pathname === '/blog/first-post/').length,beforePreviewRequests,'Text patches do not refetch the preview page');
@@ -235,7 +236,7 @@ try {
     await waitFor(`!!${frame}.contentDocument.querySelector('p > code')`);
     assert.equal(await evaluate(`${frame}.contentDocument.defaultView.getComputedStyle(${frame}.contentDocument.querySelector('p > code')).backgroundColor`),'rgb(241, 245, 249)');
     await evaluate(`${frame}.contentDocument.querySelector('main').insertAdjacentHTML('beforeend','<img data-rigel-image="title"><a data-rigel-href="title">test</a>')`);
-    await input('main input[type=text]','javascript:alert(1)');
+    await input('[data-collection-field=title] input','javascript:alert(1)');
     await waitFor(`${frame}.contentDocument.querySelector('[data-rigel-text="title"]').textContent==='javascript:alert(1)'`);
     assert.equal(await evaluate(`${frame}.contentDocument.querySelector('[data-rigel-image]').hasAttribute('src')`),false);
     assert.equal(await evaluate(`${frame}.contentDocument.querySelector('[data-rigel-href]').hasAttribute('href')`),false);

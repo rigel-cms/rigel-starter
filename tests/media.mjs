@@ -5,7 +5,9 @@ import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, writeFile, stat } from "node:fs/promises";
 
 import { mediaFixtures } from "./media-fixtures.mjs";
-import { ICONS } from "../node_modules/@rigel-cms/rigel/src/editor/lib/icons.ts";
+import { stripTypeScriptTypes } from "node:module";
+
+const { ICONS } = await import(`data:text/javascript,${encodeURIComponent(stripTypeScriptTypes(await readFile(new URL('../node_modules/@rigel-cms/rigel/src/editor/lib/icons.ts', import.meta.url), 'utf8')))}`);
 
 const url = process.env.RIGEL_URL || "http://localhost:4321/rigel/";
 const baseline = await (await fetch(new URL('/rigel/media.json', url))).json();

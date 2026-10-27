@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 
 export async function checkUnsaved({ cdp, evaluate, waitFor }) {
   const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
-  const field = 'main input[type=text]:not([readonly])';
+  const field = 'main [data-schema-path="title"] input, main [data-collection-field="title"] input, main .menu-details input:not([readonly])';
   const value = () => evaluate(`document.querySelector(${JSON.stringify(field)}).value`);
   const edit = text => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(field)}); el.value = ${JSON.stringify(text)}; el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const choice = text => evaluate(`[...document.querySelectorAll('.unsaved-dialog button')].find(b => b.textContent.trim() === ${JSON.stringify(text)}).click()`);
@@ -135,20 +135,20 @@ export async function checkUnsaved({ cdp, evaluate, waitFor }) {
       await click(`[data-collection="${collection}"]`);
       await waitFor("!!document.querySelector('.table-link')");
       await evaluate("[...document.querySelectorAll('.table-link')].find(b => b.textContent === 'Unsaved creation').click()");
-      await waitFor("!!document.querySelector('[title=\"Delete post\"]')");
+      await waitFor("!!document.querySelector('[aria-label=\"Delete post\"]')");
       const before = await count();
-      await click('[title="Delete post"]');
+      await click('[aria-label="Delete post"]');
       await waitFor("!!document.querySelector('.action-dialog[open]')");
       assert.equal(await count(), before);
       await checkPosition();
       await click('.action-dialog [aria-label=Cancel]');
       assert.equal(await value(), 'Unsaved creation');
-      await click('[title="Delete post"]');
+      await click('[aria-label="Delete post"]');
       await waitFor("!!document.querySelector('.action-dialog[open]')");
       await key('Escape', 'Escape');
       await waitFor("!document.querySelector('.action-dialog')");
       assert.equal(await count(), before);
-      await click('[title="Delete post"]');
+      await click('[aria-label="Delete post"]');
       await waitFor("!!document.querySelector('.action-dialog[open]')");
       await evaluate('window.failExplicitSave = true');
       await click('.action-dialog [type=submit]');

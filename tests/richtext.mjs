@@ -240,7 +240,7 @@ try {
   await waitFor("!!document.querySelector('.user-btn')");
   await open('#nav-pages');
   await waitFor(`document.querySelector(${JSON.stringify(editor('Nested copy'))})?.textContent === 'Nested edited'`);
-  assert.equal(await evaluate(` [...${root('Rich copy')}.querySelectorAll('.formatting-toolbar button:not([role=combobox])')].every(b => b.title && b.getAttribute('aria-label') && b.querySelector('svg') && !b.textContent.trim())`), true);
+  assert.equal(await evaluate(` [...${root('Rich copy')}.querySelectorAll('.formatting-toolbar button:not([role=combobox])')].every(b => b.dataset.tooltip && b.getAttribute('aria-label') && b.querySelector('svg') && !b.textContent.trim())`), true);
   assert.ok(await evaluate(`${root('Rich copy')}.querySelector('.formatting-toolbar').getBoundingClientRect().height <= 90`));
   await cdp('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 1, mobile: false});
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
