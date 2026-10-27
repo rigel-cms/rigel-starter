@@ -16,6 +16,7 @@ export default defineConfig({
     rigel({
       // Remove unused languages to keep the CMS browser bundle small. English is always included.
       languages: ["en", "fr", "es", "ru", "zh", "ja", "it", "de", "nl"],
+      extensions: ["./src/rigel/call-to-action.ts", "./src/rigel/widgets.ts"],
       copyDir: "src/content/copy",
       maxFileSize: 2 * 1024 * 1024,
       backend: process.env.RIGEL_GITHUB_REPO ? "github" : "local",

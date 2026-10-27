@@ -5,7 +5,7 @@ import { readdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import "../tests/local-only.mjs";
 
-const suites = ["demo", "settings", "visual", "blog-blocks", "preview", "richtext", "media", "website", "github"];
+const suites = ["demo", "settings", "visual", "blog-blocks", "preview", "richtext", "media", "website", "github", "extensions"];
 const selected = process.argv.slice(2);
 const root = fileURLToPath(new URL("../", import.meta.url));
 for (const suite of selected.length ? selected : suites) {

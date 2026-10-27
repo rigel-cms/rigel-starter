@@ -131,7 +131,8 @@ try {
   console.log('PASS: vanilla Lexical mount, filtered keyboard slash insertion, real mouse drag/drop indicator and reorder; no autosave');
   await focus('.block-content > :first-child', true);
   await waitFor("!!document.querySelector('.block-float')");
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('.block-float button')].map(button=>button.getAttribute('aria-label'))"),['Bold','Italic','Link','More formatting']);
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.block-float button')].filter(button=>!button.closest('[data-rigel-command],[data-rigel-group]')).map(button=>button.getAttribute('aria-label'))"),['Bold','Italic','Link','More formatting']);
+  assert.equal(await evaluate("!!document.querySelector('.block-float [aria-label=\"Insert call to action\"]')"),true,'Custom extension actions accompany selected text');
   await realClick('.block-float [aria-label=Bold]');
   await waitFor("document.querySelector('.block-content > :first-child .block-bold')?.textContent === 'Block test tail'");
   const beforeFormats = await tree();

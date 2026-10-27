@@ -29,6 +29,8 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
   const checkInsertions = async (media, table, context) => {
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     assert.deepEqual(await evaluate(`['Insert media','Table'].map(label=>!!${doc}.querySelector('.body-toolbar:not([hidden]) [aria-label="'+label+'"]')?.getClientRects().length)`),[media,table],context);
+    assert.equal(await evaluate(`!!${doc}.querySelector('.body-toolbar:not([hidden]) [aria-label="Insert call to action"]')?.getClientRects().length`),true,`Custom extension remains available: ${context}`);
+    assert.equal(await evaluate(`!!${doc}.querySelector('.body-toolbar:not([hidden]) [data-rigel-group="widgets"] button')?.getClientRects().length`),true,`Grouped extensions remain available: ${context}`);
   };
   const settings = async (experience, theme) => {
     await click('.user-btn');
@@ -218,7 +220,7 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',windowsVirtualKeyCode:13});
     await cdp('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',windowsVirtualKeyCode:13});
     await checkInsertions(true,true,'Image insertion starts from an empty paragraph');
-    assert.deepEqual(await evaluate(`[...${doc}.querySelectorAll('.body-toolbar button')].map(button=>button.getAttribute('aria-label')).filter(Boolean).slice(-4,-1)`),['Table','Bulleted list','Numbered list'],'Table and list buttons follow the image button');
+    assert.deepEqual(await evaluate(`[...${doc}.querySelectorAll('.body-toolbar button')].filter(button=>!button.closest('[data-rigel-command],[data-rigel-group]')).map(button=>button.getAttribute('aria-label')).filter(Boolean).slice(-4,-1)`),['Table','Bulleted list','Numbered list'],'Table and list buttons follow the image button');
     for (const label of ['Insert media','Table']) {
       await cdp('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
       const point = await evaluate(`(() => {const button=${doc}.querySelector('.body-toolbar button[aria-label="${label}"]'),rect=button.getBoundingClientRect(),outer=${frame}.getBoundingClientRect();return {x:outer.left+rect.left+rect.width/2,y:outer.top+rect.top+rect.height/2,background:${doc}.defaultView.getComputedStyle(button).backgroundColor};})()`);

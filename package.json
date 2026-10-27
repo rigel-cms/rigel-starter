@@ -2,9 +2,22 @@
   "name": "rigel-starter",
   "description": "An Astro starter with Rigel CMS.",
   "license": "Apache-2.0",
-  "author": { "name": "FreshJuice", "email": "contact@freshjuice.dev", "url": "https://freshjuice.dev/" },
-  "contributors": [{ "name": "Alex Zappa", "email": "alex@zappa.dev", "url": "https://alex.zappa.dev/" }],
-  "repository": { "type": "git", "url": "git+ssh://git@github.com/rigel-cms/rigel-starter.git" },
+  "author": {
+    "name": "FreshJuice",
+    "email": "contact@freshjuice.dev",
+    "url": "https://freshjuice.dev/"
+  },
+  "contributors": [
+    {
+      "name": "Alex Zappa",
+      "email": "alex@zappa.dev",
+      "url": "https://alex.zappa.dev/"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/rigel-cms/rigel-starter.git"
+  },
   "homepage": "https://rigelcms.dev",
   "type": "module",
   "version": "1.0.0",
@@ -27,6 +40,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
+    "@astrojs/svelte": "^9.1.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.0"
   }
