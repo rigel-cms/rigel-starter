@@ -140,6 +140,22 @@ try {
   await snapshot('sidebar-right');
   await dismiss();
 
+  for (const [expanded, text] of [[false, 'Expand sidebar'], [true, 'Collapse sidebar']]) {
+    const point = await center('.sidebar-toggle');
+    await mouse(point.x, point.y);
+    await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+    await waitFor(`document.querySelector('.sidebar-toggle').getAttribute('aria-expanded') === '${expanded}'`);
+    assert.equal(await evaluate('document.activeElement === document.querySelector(".sidebar-toggle")'), true);
+    await mouse(600, 50);
+    await delay(300);
+    await hover('.sidebar-toggle');
+    await waitFor(visible);
+    assert.equal((await geometry()).text, text, 'A clicked, still-focused toggle regains its updated tooltip on hover');
+    await snapshot(expanded ? 'sidebar-expanded-hover' : 'sidebar-collapsed-hover');
+  }
+  await dismiss();
+
   for (const side of ['top', 'bottom', 'left', 'right']) for (const align of ['start', 'center', 'end']) {
     await probe({ side, align, width: 100, height: 64 });
     await focus('#tooltip-probe');
