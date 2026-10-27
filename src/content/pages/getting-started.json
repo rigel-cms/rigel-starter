@@ -14,7 +14,7 @@
       "body": "Edit the website pages, shared content, blog posts, news and footer menus in the Rigel editor. Page content uses the visual canvas; articles use a block editor. The main marketing navigation is developer-owned.",
       "linkLabel": "Open the Rigel editor",
       "linkHref": "/rigel/",
-      "closing": "This starter is an early-stage demo. Local mode saves content files to disk without creating Git commits. Review the sample content and configuration before using it for a real website."
+      "closing": "This starter is a demo. Local mode saves content files to disk without creating Git commits. Review the sample content and configuration before using it for a real website."
     }
   ],
   "description": "A demo Astro website with editable pages and articles in Rigel CMS."
