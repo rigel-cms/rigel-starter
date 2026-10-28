@@ -49,7 +49,8 @@ export async function checkCollectionVisual({ cdp, evaluate, waitFor }) {
       await waitFor(`document.querySelector(${JSON.stringify(draftSwitch)}).checked === ${originalDraft}`);
       assert.equal(await evaluate("!!document.querySelector('.site-preview, .preview-divider')"), false);
       assert.equal(await evaluate(`${frame}.getAttribute('sandbox')`), 'allow-same-origin');
-      assert.equal(await evaluate(`new URL(${frame}.src).pathname`), `/${item.collection}/${item.slug}/`);
+      assert.equal(await evaluate(`new URL(${frame}.src).pathname`), `/preview/${item.collection}/`);
+      assert.equal(await evaluate("document.querySelector('.visual-live').getAttribute('href')"), `/${item.collection}/${item.slug}/`, 'Public destination stays separate from the editor template');
       assert.equal(await evaluate("document.querySelector('.collection-panel').getBoundingClientRect().left >= document.querySelector('.visual-canvas').getBoundingClientRect().right - 1"), true);
       await evaluate(`window.collectionFrame = ${frame}; window.collectionDoc = ${frame}.contentDocument`);
       await click('[aria-label="Toggle properties panel"]');
@@ -94,7 +95,7 @@ export async function checkCollectionVisual({ cdp, evaluate, waitFor }) {
       }
       assert(html.includes(title) && html.includes(body), 'Actual public page renders saved article');
       await waitFor("document.querySelector('.save-status')?.textContent.trim() === 'Saved'");
-      assert.deepEqual(await evaluate(`({ frame: ${frame} === window.collectionFrame, document: ${frame}.contentDocument === window.collectionDoc, src: new URL(${frame}.src).pathname })`), { frame: true, document: true, src: `/${item.collection}/${item.slug}/` }, 'Save keeps the canvas mounted');
+      assert.deepEqual(await evaluate(`({ frame: ${frame} === window.collectionFrame, document: ${frame}.contentDocument === window.collectionDoc, src: new URL(${frame}.src).pathname })`), { frame: true, document: true, src: `/preview/${item.collection}/` }, 'Save keeps the canvas mounted');
       await cdp('Page.reload');
       await waitFor("!!document.querySelector('[data-doctype=author]')");
       await open(item);

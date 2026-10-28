@@ -46,6 +46,10 @@ try {
     const loaded = new Promise((resolve, reject) => {
       listener = ({ data }) => {
         const event = JSON.parse(data);
+        if (event.sessionId === sessionId && event.method === "Page.javascriptDialogOpening" && event.params.type === "beforeunload") {
+          console.log("Accepting unsaved-change confirmation for requested test reload");
+          send("Page.handleJavaScriptDialog", { accept: true }, sessionId).catch(reject);
+        }
         if (event.sessionId === sessionId && event.method === "Page.loadEventFired") resolve();
       };
       socket.addEventListener("message", listener);

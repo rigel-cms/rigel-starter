@@ -88,11 +88,13 @@ export async function checkSelects({ cdp, evaluate, waitFor }) {
   await click(author);
   await waitFor("!!document.querySelector('.select-menu:popover-open')");
   const studio = await evaluate("[...document.querySelectorAll('.select-menu:popover-open .select-option')].find(option => option.querySelector('span').textContent === 'Rigel Studio').id");
+  const studioSelected = "[...document.querySelector('[data-collection-field=author] select').selectedOptions].some(option => option.value === 'author:rigel-studio')";
+  const initiallySelected = await evaluate(studioSelected);
   await click(`[id="${studio}"]`);
-  assert.equal(await evaluate("[...document.querySelector('[data-collection-field=author] select').selectedOptions].some(option => option.value === 'author:rigel-studio')"), true);
+  assert.equal(await evaluate(studioSelected), !initiallySelected);
   assert.equal(await evaluate("!!document.querySelector('.select-menu:popover-open')"), true, 'Multiple selection keeps the menu open');
   await click(`[id="${studio}"]`);
-  assert.equal(await evaluate("[...document.querySelector('[data-collection-field=author] select').selectedOptions].some(option => option.value === 'author:rigel-studio')"), false);
+  assert.equal(await evaluate(studioSelected), initiallySelected);
   await clickPreview();
   await waitFor("!document.querySelector('.select-menu:popover-open')");
   console.log('PASS: real preview iframe clicks dismiss single/multiple dropdowns without changing selection; dropdowns reopen normally');
@@ -113,6 +115,7 @@ export async function checkSelects({ cdp, evaluate, waitFor }) {
   await click(`[id="${heading}"]`);
   assert.equal(await evaluate("document.querySelector('[data-collection-field=\"$body\"] select[aria-label=\"Block type\"]').value"), 'h2');
   await click('[data-collection-field="$body"] [aria-label="Insert media"]');
+  await waitFor("!!document.querySelector('.media-menu:popover-open [role=menuitem]')");
   await click('.media-menu:popover-open [role="menuitem"]');
   await waitFor("!!document.querySelector('.image-dialog[open] button[aria-label=\"Image format\"]')");
   await click('.image-dialog button[aria-label="Image format"]');
