@@ -20,6 +20,23 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
     await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
   };
   const input = (selector, value) => evaluate(`(() => { const input = document.querySelector(${JSON.stringify(selector)}); input.value = ${JSON.stringify(value)}; input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  const checkScroll = async () => {
+    await evaluate("document.querySelector('.schema-panel').scrollIntoView({ block: 'start' }); document.querySelector('.schema-panel').scrollTop = 0");
+    const before = await evaluate("(() => { const panel = document.querySelector('.schema-panel'); return { tabs: panel.querySelector('.panel-tabs').getBoundingClientRect().top, field: panel.querySelector('.document-properties input, #properties-content input').getBoundingClientRect().top }; })()");
+    await evaluate("document.querySelector('.schema-panel').scrollTop = 160");
+    await waitFor("document.querySelector('.schema-panel').scrollTop >= 100");
+    const after = await evaluate("(() => { const panel = document.querySelector('.schema-panel'); return { tabs: panel.querySelector('.panel-tabs').getBoundingClientRect().top, field: panel.querySelector('.document-properties input, #properties-content input').getBoundingClientRect().top }; })()");
+    assert.ok(Math.abs(after.tabs - before.tabs) < 2, 'Only Content/SEO tabs stay pinned while scrolling');
+    assert.ok(after.field < before.field - 80, 'Page and article properties scroll away beneath the tabs');
+    assert.equal(await evaluate("(() => { const panel = document.querySelector('.schema-panel'), tabs = panel.querySelector('.panel-tabs'), background = getComputedStyle(panel).backgroundColor; return background !== 'rgba(0, 0, 0, 0)' && getComputedStyle(tabs).backgroundColor === background && getComputedStyle(tabs, '::before').backgroundColor === background; })()"), true, 'Tabs and the padding above them have an opaque panel background');
+    assert.equal(await evaluate("(() => { const tabs = document.querySelector('.panel-tabs'), r = tabs.getBoundingClientRect(); return [r.top - 8, r.top + r.height / 2].every(y => document.elementFromPoint(r.left + r.width / 2, y)?.closest('.panel-tabs') === tabs); })()"), true, 'Scrolling fields cannot paint or receive clicks above the tabs');
+    const width = await evaluate('innerWidth');
+    await writeFile(`_temp/properties-scroll-${width}.png`, Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+    await evaluate("document.querySelector('.schema-panel').scrollTop = document.querySelector('.schema-panel').scrollHeight");
+    const bottom = await evaluate("(() => { const panel = document.querySelector('.schema-panel'), controls = [...panel.querySelectorAll('#properties-content input, #properties-content textarea, #properties-content [contenteditable]')].filter(el => el.getBoundingClientRect().height); const last = controls.at(-1).getBoundingClientRect(), tabs = panel.querySelector('.panel-tabs').getBoundingClientRect(); return { last: last.toJSON(), tabs: tabs.toJSON(), panel: panel.getBoundingClientRect().toJSON(), width: innerWidth }; })()");
+    assert.ok(bottom.last.bottom > bottom.tabs.bottom && bottom.last.bottom <= bottom.panel.bottom + 1, `Bottom properties remain reachable below the pinned tabs: ${JSON.stringify(bottom)}`);
+    await evaluate("document.querySelector('.schema-panel').scrollTop = 0");
+  };
   const image = '/demo/landscape.jpg';
   const absoluteImage = new URL(image, process.env.RIGEL_URL || 'http://localhost:4321/rigel/').href;
   const chooseImage = async attr => {
@@ -36,7 +53,7 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
     for (const page of pages) {
       await open(page);
       assert.equal(await evaluate("!!document.querySelector('[aria-label=\"Edit name\"]')"), false);
-      assert.deepEqual(await evaluate("[...document.querySelectorAll('.page-properties-header h3, #properties-content > section > h3')].map(heading => heading.textContent)"), ['Page properties', 'Structure']);
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('#properties-content > section > h3')].map(heading => heading.textContent)"), ['Page properties', 'Structure']);
       await evaluate("window.pageNameControl = document.querySelector('.document-properties [data-schema-path=title] input'); window.draftControl = document.querySelector('.document-properties [data-schema-path=draft] input[role=switch]')");
       assert.equal(await evaluate("!!window.pageNameControl && !!window.draftControl"), true);
       assert.deepEqual(await evaluate("[...document.querySelectorAll('.panel-tabs [role=tab]')].map(tab => tab.textContent)"), ['Content', 'SEO']);
@@ -46,14 +63,27 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
       await evaluate("document.querySelector('.visual-editor iframe').contentDocument.querySelector('h1').click()");
       await waitFor("document.querySelector('#properties-tab-content').getAttribute('aria-selected') === 'true' && !!document.activeElement?.closest('.section-properties')");
       assert.equal(await evaluate("window.pageNameControl === document.querySelector('.document-properties [data-schema-path=title] input') && window.draftControl === document.querySelector('.document-properties [data-schema-path=draft] input[role=switch]')"), true, 'Page properties remain mounted when selecting sections');
-      assert.deepEqual(await evaluate("[...document.querySelectorAll('.page-properties-header h3, #properties-content > section > h3')].map(heading => heading.textContent)"), ['Page properties', 'Structure', 'Section properties']);
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('#properties-content > section > h3')].map(heading => heading.textContent)"), ['Page properties', 'Structure', 'Section properties']);
       await evaluate("document.querySelector('.structure-row').click()");
       assert.equal(await evaluate("window.pageNameControl === document.querySelector('.document-properties [data-schema-path=title] input')"), true);
-      assert.equal(await evaluate("(() => { const panel = document.querySelector('.schema-panel').getBoundingClientRect(), name = window.pageNameControl.getBoundingClientRect(), draft = window.draftControl.getBoundingClientRect(); return name.top >= panel.top && draft.bottom <= panel.bottom; })()"), true, 'Page name and Draft stay visible while section properties are focused');
-      if (page.slug === 'home') await writeFile('_temp/page-properties.png', Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+      if (page.slug === 'home') {
+        for (const width of [1280, 390]) {
+          await cdp('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: false });
+          await checkScroll();
+        }
+        await cdp('Emulation.clearDeviceMetricsOverride');
+        await writeFile('_temp/page-properties.png', Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+      }
     }
     for (const item of fixtures) {
       await open(item);
+      if (item.collection) {
+        for (const width of [1280, 390]) {
+          await cdp('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: false });
+          await checkScroll();
+        }
+        await cdp('Emulation.clearDeviceMetricsOverride');
+      }
       const frame = "document.querySelector('.visual-editor iframe')";
       const heading = await evaluate(`${frame}.contentDocument.querySelector('h1').textContent`);
       const originalSeo = await evaluate("document.querySelector('.seo-fields input').value");
@@ -127,6 +157,8 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
     }
     console.log('PASS: Content/SEO tabs on all website pages and articles, keyboard navigation, canvas selection returns to Content, independent SEO values, explicit Save/file/public head/reload and exact fixture restoration');
   } finally {
+    await cdp('Emulation.clearDeviceMetricsOverride');
+    await evaluate('scrollTo(0, 0)');
     await Promise.all(fixtures.map((item, index) => writeFile(item.file, originals[index])));
     await cdp('Page.reload');
     await waitFor("!!document.querySelector('[data-doctype=author]')");
