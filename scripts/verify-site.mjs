@@ -69,8 +69,9 @@ if (demo) {
   await assert.rejects(access(join(dist, 'demo/fields/index.html')));
   assert.ok(!manifest.schema.documents.some(type => type.demo));
 }
-assert.deepEqual(manifest.documents.map(doc => doc.id).sort(), ['settings:site', ...(demo ? ['demo:fields'] : []), 'author:alex', 'author:rigel-studio', 'callout:studio', 'logoSet:brands', ...editablePages.map(slug => `page:${slug}`)].sort());
-assert.deepEqual(manifest.schema.documents.map(doc => doc.name), ['settings', ...(demo ? ['demo'] : []), 'author', 'page', 'logoSet', 'callout']);
+const multilingual = process.env.RIGEL_CONTENT_MULTILANG === 'true';
+assert.deepEqual(manifest.documents.map(doc => doc.id).sort(), ['settings:site', ...(demo ? ['demo:fields'] : []), 'author:alex', 'author:rigel-studio', 'callout:studio', 'logoSet:brands', ...editablePages.map(slug => `page:${slug}`), ...(multilingual ? ['pageEn:welcome', 'pageFr:welcome', 'pageFr:unpublished'] : [])].sort());
+assert.deepEqual(manifest.schema.documents.map(doc => doc.name), ['settings', ...(demo ? ['demo'] : []), 'author', 'page', 'logoSet', 'callout', ...(multilingual ? ['pageEn', 'pageFr'] : [])]);
 for (const collection of ['blog', 'news']) {
   for (const file of (await readdir(new URL(`../src/content/${collection}/`, import.meta.url))).filter(file => file.endsWith('.json'))) {
     const article = JSON.parse(await readFile(new URL(`../src/content/${collection}/${file}`, import.meta.url), 'utf8'));

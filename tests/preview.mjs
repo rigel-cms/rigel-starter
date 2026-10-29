@@ -93,7 +93,7 @@ try {
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    assert.fail(`Timed out: ${expression}`);
+    assert.fail(`Timed out: ${expression}\n${JSON.stringify(errors)}\n${await evaluate("document.body.innerText.slice(0,3000)")}`);
   }
   await cdp("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "light" }] });
   const watched = ['src/content/blog/first-post.json', 'src/content/news/launch-week.json', 'src/content/menus/footer.json'];
@@ -157,6 +157,7 @@ try {
     await testPreviewResize({ cdp, evaluate, waitFor, open: openLegacyPage, reload: () => navigate('Page.reload') });
   } finally {
     await cdp('Page.removeScriptToEvaluateOnNewDocument', { identifier });
+    await evaluate("(() => { const settings = JSON.parse(localStorage.getItem('rigelcms.settings')); settings.userPref.editorExperience = 'sidebar'; localStorage.setItem('rigelcms.settings', JSON.stringify(settings)); })()");
     await navigate('Page.reload');
     await waitFor("!!document.querySelector('#nav-pages')");
   }
@@ -195,10 +196,12 @@ try {
   await waitFor("!!document.querySelector('[data-schema-path=copyright]')");
   assert.equal(await evaluate("!!document.querySelector('.site-preview')"),false,'Global Site settings has no page preview');
   assert.equal(await evaluate(`!!${frame}`),false);
-  await open('#nav-menus','Header');
+  const manifest=await (await fetch(new URL('/rigel/manifest.json',url))).json();
+  const menu = manifest.menus.entries.find(entry => entry.slug === 'footer');
+  assert.ok(menu, 'The watched footer menu fixture exists');
+  await open('#nav-menus',menu.title);
   await waitFor("!!document.querySelector('.menu-editor')");
   assert.equal(await evaluate("!!document.querySelector('.site-preview, .visual-editor')"),false,'Menus have no page preview');
-  const manifest=await (await fetch(new URL('/rigel/manifest.json',url))).json();
   for(const collection of ['blog','news']) {
     const post=manifest.collections.find(c=>c.name===collection).posts[0];
     await open(`[data-collection=${collection}]`,post.frontmatter.title);

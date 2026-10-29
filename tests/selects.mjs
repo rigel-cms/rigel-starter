@@ -14,7 +14,11 @@ export async function checkSelects({ cdp, evaluate, waitFor }) {
   };
   const navigate = async selector => {
     await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
-    if (await evaluate("!!document.querySelector('.unsaved-dialog[open]')")) await evaluate("[...document.querySelectorAll('.unsaved-dialog button')].find(button => button.textContent === 'Discard changes').click()");
+    await evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+    if (await evaluate("!!document.querySelector('.unsaved-dialog[open]')")) {
+      await evaluate("[...document.querySelectorAll('.unsaved-dialog button')].find(button => button.textContent === 'Discard changes').click()");
+      await waitFor("!document.querySelector('.unsaved-dialog[open]')");
+    }
   };
   const article = async collection => {
     await navigate(`[data-collection=${collection}]`);
@@ -114,7 +118,7 @@ export async function checkSelects({ cdp, evaluate, waitFor }) {
   const heading = await evaluate("[...document.querySelectorAll('.select-menu:popover-open .select-option')].find(option => option.querySelector('span').textContent === 'Heading 2').id");
   await click(`[id="${heading}"]`);
   assert.equal(await evaluate("document.querySelector('[data-collection-field=\"$body\"] select[aria-label=\"Block type\"]').value"), 'h2');
-  await click('[data-collection-field="$body"] [aria-label="Insert media"]');
+  await click('[data-collection-field="$body"] button[aria-label="Insert media"]');
   await waitFor("!!document.querySelector('.media-menu:popover-open [role=menuitem]')");
   await click('.media-menu:popover-open [role="menuitem"]');
   await waitFor("!!document.querySelector('.image-dialog[open] button[aria-label=\"Image format\"]')");

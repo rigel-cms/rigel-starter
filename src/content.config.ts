@@ -1,3 +1,4 @@
+import { multilingual } from "./multilang.mjs";
 import { defineCollection } from "astro:content";
 import { z } from "astro/zod";
 import { glob } from "astro/loaders";
@@ -18,9 +19,15 @@ const blog = defineCollection({
   schema: z.object({ frontmatter: article.extend({ tags: z.array(z.string()).default([]) }), body: z.object({ root: z.object({ type: z.literal("root") }).loose() }).loose() }).transform(({ frontmatter, body }) => ({ ...frontmatter, body })),
 });
 
+const articleContent = z.object({ frontmatter: article, body: z.object({ root: z.object({ type: z.literal("root") }).loose() }).loose() }).transform(({ frontmatter, body }) => ({ ...frontmatter, body }));
+
 const news = defineCollection({
   loader: glob({ pattern: "**/*.json", base: "./src/content/news" }),
-  schema: z.object({ frontmatter: article, body: z.object({ root: z.object({ type: z.literal("root") }).loose() }).loose() }).transform(({ frontmatter, body }) => ({ ...frontmatter, body })),
+  schema: articleContent,
 });
 
-export const collections = { blog, news };
+export const collections = {
+  blog, news,
+  "articles-en": defineCollection({ loader: multilingual ? glob({ pattern: "*.json", base: "./src/content/multilang/en/articles" }) : async () => [], schema: articleContent }),
+  "articles-fr": defineCollection({ loader: multilingual ? glob({ pattern: "*.json", base: "./src/content/multilang/fr/articles" }) : async () => [], schema: articleContent }),
+};

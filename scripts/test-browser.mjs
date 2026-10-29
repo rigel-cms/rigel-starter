@@ -6,16 +6,17 @@ import { join } from "node:path";
 import "../tests/local-only.mjs";
 
 const suites = ["demo", "settings", "visual", "blog-blocks", "preview", "richtext", "media", "website", "github", "extensions"];
+if (process.env.RIGEL_CONTENT_MULTILANG === "true") suites.push("multilang");
 const selected = process.argv.slice(2);
 const root = fileURLToPath(new URL("../", import.meta.url));
 for (const suite of selected.length ? selected : suites) {
-  assert.ok(suites.includes(suite), `Unknown browser suite: ${suite}`);
+  assert.ok([...suites, "multilang"].includes(suite), `Unknown browser suite: ${suite}`);
   console.log(`\nRunning ${suite}`);
   const files = () => ['src/content', 'public'].flatMap(directory => readdirSync(join(root, directory), { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)));
   const originals = new Map(files().map(file => [file, readFileSync(file)]));
   let result;
   try {
-    result = spawnSync(process.execPath, [`tests/${suite}.mjs`], { cwd: root, stdio: "inherit", timeout: 300_000 });
+    result = spawnSync(process.execPath, [`tests/${suite === "multilang" ? "settings" : suite}.mjs`], { cwd: root, stdio: "inherit", timeout: 300_000, env: { ...process.env, RIGEL_BROWSER_MULTILANG_ONLY: suite === "multilang" ? "true" : "false" } });
   } finally {
     for (const file of files()) if (!originals.has(file)) rmSync(file);
     for (const [file, bytes] of originals) writeFileSync(file, bytes);

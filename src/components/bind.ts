@@ -1,5 +1,5 @@
 export interface Bind {
-  doc: string;
+  doc?: string;
   base: string;
 }
 

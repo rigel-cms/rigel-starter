@@ -16,7 +16,7 @@ import ContactDetails from "./ContactDetails.astro";
 import ArticleText from "./ArticleText.astro";
 import ArticleCard from "./ArticleCard.astro";
 
-interface Props { docId: string; section: Record<string, never>; blog: CollectionEntry<"blog">[]; news: CollectionEntry<"news">[] }
+interface Props { docId?: string; section: Record<string, never>; blog: CollectionEntry<"blog">[]; news: CollectionEntry<"news">[] }
 const { docId, section, blog, news } = Astro.props;
 const bind = { doc: docId, base: `sections.${section._key}` };
 const set = derefDocument(section.logoSet);

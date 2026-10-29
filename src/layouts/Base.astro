@@ -7,12 +7,12 @@ import Icon from "../components/Icon.astro";
 import "../styles/site.css";
 const links = [["/about/", "Studio"], ["/services/", "Services"], ["/blog/", "Journal"], ["/news/", "News"], ["/rigel/", "CMS Studio"], ["/contact/", "Get in touch"]];
 const settings = getDocument("settings:site")!;
-const { title = String(settings.data.siteName), description = String(settings.data.metaDescription), ogImage } = Astro.props;
+const { title = String(settings.data.siteName), description = String(settings.data.metaDescription), ogImage, locale = "en" } = Astro.props;
 const imageUrl = typeof ogImage === "string" && ogImage.trim() ? new URL(ogImage.trim(), Astro.site ?? Astro.url) : undefined;
 const socialImage = imageUrl && ["https:", "http:"].includes(imageUrl.protocol) ? imageUrl.href : undefined;
 ---
 
-<html lang="en">
+<html lang={locale}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

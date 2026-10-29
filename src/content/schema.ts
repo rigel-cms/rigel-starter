@@ -1,8 +1,9 @@
+import { multilingual } from "../multilang.mjs";
 import { defineDocument, defineObject, defineSchema } from "@rigel-cms/rigel/content";
 
 const titleField = { key: "title", label: "Title", type: "string" as const, required: true };
 
-export default defineSchema({
+const schema = defineSchema({
   documents: [
     defineDocument({
       name: "settings", title: "Site settings", type: "document", folder: "src/content/settings", shared: true, singleton: true, creatable: false,
@@ -299,3 +300,24 @@ export default defineSchema({
     }),
   ],
 });
+
+if (multilingual) {
+  const page = schema.documents.find(document => document.name === "page")!;
+  for (const locale of ["en", "fr"] as const) {
+    const sections = locale === "en" ? ["pageIntro", "textBlock", "logoStrip"] : ["hero", "story", "logoStrip"];
+    schema.documents.push(defineDocument({
+      ...page,
+      name: locale === "en" ? "pageEn" : "pageFr",
+      title: locale === "en" ? "English pages" : "Pages françaises",
+      locale,
+      folder: `src/content/multilang/${locale}/pages`,
+      fields: page.fields.map(field => field.key === "sections" ? {
+        ...field,
+        items: sections.map(name => ({ type: "object" as const, name })),
+      } : field),
+      template: sections.map(type => ({ type })),
+    }));
+  }
+}
+
+export default schema;

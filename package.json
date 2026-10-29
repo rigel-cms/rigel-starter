@@ -29,7 +29,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "test": "node tests/media-assets.mjs && node tests/content.mjs && node scripts/verify-site.mjs",
+    "test": "node tests/media-assets.mjs && node tests/content.mjs && node scripts/verify-site.mjs && node tests/multilang-content.mjs",
     "test:browser": "node scripts/test-browser.mjs",
     "typecheck": "astro check"
   },

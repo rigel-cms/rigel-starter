@@ -17,6 +17,12 @@ settingsDoc.data.siteName = "Remote draft fixture";
 const filePath = `${settingsType.folder}/site.json`;
 let stored = JSON.stringify(settingsDoc.data, null, 2) + "\n";
 let sha = "a".repeat(40);
+let head = "b".repeat(40);
+let sequence = 0;
+const nextSha = () => (++sequence).toString(16).padStart(40, "0");
+const blobs = new Map([[sha, stored]]);
+const trees = new Map([["c".repeat(40), sha]]);
+const commits = new Map([[head, { tree: "c".repeat(40), parents: [] }]]);
 let installed = false;
 let writable = true;
 let writes = 0;
@@ -51,24 +57,61 @@ function api(path, method, body) {
   if (path.startsWith("/user/installations/7/repositories?")) return [200, { total_count: 1, repositories: [repository] }];
   const prefix = `/repos/${manifest.github.repo}`;
   if (path === prefix) return [200, repository];
-  if (path.startsWith(`${prefix}/git/ref/heads/`) || path.startsWith(`${prefix}/branches/`)) return [200, { ref: "refs/heads/drafts", object: { sha: "b".repeat(40), type: "commit" }, commit: { sha: "b".repeat(40) } }];
-  if (path.startsWith(`${prefix}/git/trees/`)) return [200, { truncated: false, tree: [{ path: filePath, type: "blob", mode: "100644", sha }] }];
-  if (path.startsWith(`${prefix}/git/commits/`)) return [200, { tree: { sha: "b".repeat(40) } }];
-  if (path.startsWith(`${prefix}/git/blobs/`)) return [200, { sha, encoding: "base64", content: Buffer.from(stored).toString("base64") }];
-  if (path.split("?")[0] === `${prefix}/contents/${filePath}`) {
-    if (method === "GET") {
-      if (readbackFailures) { readbackFailures--; return [503, { message: "Fixture verification outage" }]; }
-      return [200, { type: "file", path: filePath, sha, encoding: "base64", content: Buffer.from(stored).toString("base64") }];
-    }
-    if (method === "PUT") {
-      if (writeStatus) return [writeStatus, { message: "Fixture access revoked" }];
-      assert.equal(body.branch, "drafts");
-      assert.equal(body.sha, sha, "Save uses the loaded blob, not the newest SHA");
-      if (conflict) return [409, { message: "Fixture conflict" }];
-      stored = Buffer.from(body.content, "base64").toString("utf8");
-      sha = String(++writes).padStart(40, "0");
-      return [200, { content: { sha } }];
-    }
+  if (method === "GET" && (path === `${prefix}/git/ref/heads/drafts` || path === `${prefix}/branches/drafts`)) return [200, { ref: "refs/heads/drafts", object: { sha: head, type: "commit" }, commit: { sha: head } }];
+  if (method === "GET" && path.startsWith(`${prefix}/git/trees/`)) {
+    const key = path.slice(`${prefix}/git/trees/`.length).split('?')[0];
+    assert.ok(trees.has(commits.get(key)?.tree ?? key), 'Requested tree exists');
+    return [200, { truncated: false, tree: [{ path: filePath, type: "blob", mode: "100644", sha: trees.get(commits.get(key)?.tree ?? key) }] }];
+  }
+  if (method === "GET" && path.startsWith(`${prefix}/git/commits/`)) {
+    const commit = commits.get(path.slice(`${prefix}/git/commits/`.length));
+    assert.ok(commit, 'Requested commit exists');
+    return [200, { tree: { sha: commit.tree }, parents: commit.parents.map(sha => ({ sha })) }];
+  }
+  if (method === "GET" && path.startsWith(`${prefix}/git/blobs/`)) {
+    const blob = path.slice(`${prefix}/git/blobs/`.length);
+    assert.ok(blobs.has(blob), 'Requested blob exists');
+    return [200, { sha: blob, encoding: "base64", content: Buffer.from(blobs.get(blob)).toString("base64") }];
+  }
+  if (method === "POST" && path === `${prefix}/git/blobs`) {
+    assert.equal(body.encoding, "base64");
+    const blob = nextSha();
+    blobs.set(blob, Buffer.from(body.content, "base64").toString("utf8"));
+    return [201, { sha: blob }];
+  }
+  if (method === "POST" && path === `${prefix}/git/trees`) {
+    assert.equal(body.base_tree, commits.get(head).tree, 'Save uses the loaded draft tree');
+    assert.equal(trees.get(body.base_tree), sha, 'Save uses the loaded blob, not a newer SHA');
+    assert.equal(body.tree.length, 1);
+    assert.deepEqual(body.tree[0], { path: filePath, mode: "100644", type: "blob", sha: body.tree[0].sha });
+    assert.ok(blobs.has(body.tree[0].sha));
+    const tree = nextSha();
+    trees.set(tree, body.tree[0].sha);
+    return [201, { sha: tree }];
+  }
+  if (method === "POST" && path === `${prefix}/git/commits`) {
+    assert.deepEqual(body.parents, [head], 'Save is based on the loaded draft head');
+    assert.ok(trees.has(body.tree));
+    const commit = nextSha();
+    commits.set(commit, { tree: body.tree, parents: body.parents });
+    return [201, { sha: commit }];
+  }
+  if (method === "PATCH" && path === `${prefix}/git/refs/heads/drafts`) {
+    assert.equal(body.force, false, 'Save never force-updates the draft branch');
+    const commit = commits.get(body.sha);
+    assert.ok(commit);
+    if (writeStatus) return [writeStatus, { message: "Fixture access revoked" }];
+    if (conflict || commit.parents[0] !== head) return [422, { message: "Fixture conflict" }];
+    head = body.sha;
+    sha = trees.get(commit.tree);
+    stored = blobs.get(sha);
+    writes++;
+    return [200, { object: { sha: head } }];
+  }
+  if (method === "GET" && path.split("?")[0] === `${prefix}/contents/${filePath}`) {
+    assert.equal(new URLSearchParams(path.split('?')[1]).get('ref'), 'drafts');
+    if (readbackFailures) { readbackFailures--; return [503, { message: "Fixture verification outage" }]; }
+    return [200, { type: "file", path: filePath, sha, encoding: "base64", content: Buffer.from(stored).toString("base64") }];
   }
   throw new Error(`Unexpected fixture request: ${method} ${path}`);
 }
@@ -116,7 +159,7 @@ try {
         const [status, result] = api(target.pathname + target.search, request.method, request.postData ? JSON.parse(request.postData) : undefined);
         await cdp("Fetch.fulfillRequest", { requestId, responseCode: status, responseHeaders: [
           { name: "Content-Type", value: "application/json" }, { name: "Access-Control-Allow-Origin", value: "*" },
-          { name: "Access-Control-Allow-Headers", value: "Authorization,Content-Type,Accept,X-GitHub-Api-Version" }, { name: "Access-Control-Allow-Methods", value: "GET,POST,PUT,DELETE,OPTIONS" },
+          { name: "Access-Control-Allow-Headers", value: "Authorization,Content-Type,Accept,X-GitHub-Api-Version" }, { name: "Access-Control-Allow-Methods", value: "GET,POST,PUT,PATCH,DELETE,OPTIONS" },
         ], body: Buffer.from(result === null ? "" : JSON.stringify(result)).toString("base64") });
       } else if (target.pathname.startsWith("/rigel/api/local/")) {
         throw new Error("GitHub mode called a local persistence API");
@@ -243,9 +286,11 @@ try {
   await waitFor("!!document.querySelector('.save-toast')");
   assert.equal(writes, beforeReadback + 1, "The write succeeded before readback failed");
   assert.equal(JSON.parse(stored).siteName, "Recover confirmed write");
+  const commitsBeforeRetry = commits.size;
   await click(".save-toast .outlined");
   await waitFor("document.querySelector('.save-status').textContent.trim() === 'Saved'");
-  assert.equal(writes, beforeReadback + 1, "Retry verifies the completed write without issuing another PUT");
+  assert.equal(writes, beforeReadback + 1, "Retry verifies the completed write without updating the branch again");
+  assert.equal(commits.size, commitsBeforeRetry, "Retry does not create a duplicate commit");
   await evaluate("(() => { const input = document.querySelector('.document-form input[type=text]'); input.value = 'Sign-out guard draft'; input.dispatchEvent(new Event('input', {bubbles:true})); })()");
   await click(".user-btn");
   await click("#github-sign-out");
@@ -257,7 +302,7 @@ try {
   await waitFor("!!document.querySelector('#github-sign-in')");
   assert.equal(await evaluate("JSON.stringify({...localStorage,...sessionStorage}).includes('ghu_fixture_user_token')"), false);
   assert.deepEqual(errors, []);
-  console.log("PASS: real CMS popup, installation/write gates, draft load/Unicode Save, no local writes, conflicts, expiry and revoked 401/403 recovery with wrong-account rejection, readback retry without duplicate PUT, guarded sign-out, no token storage, AA/keyboard/light/dark 1280/390/320px (external transport is fixture-only)");
+  console.log("PASS: real CMS popup, installation/write gates, draft load/Unicode Save, no local writes, conflicts, expiry and revoked 401/403 recovery with wrong-account rejection, readback retry without duplicate commit/branch update, guarded sign-out, no token storage, AA/keyboard/light/dark 1280/390/320px (external transport is fixture-only)");
 } finally {
   socket?.close(); chrome.kill("SIGKILL");
   await new Promise(resolve => gateway.close(resolve));

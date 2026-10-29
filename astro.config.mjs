@@ -2,6 +2,7 @@ import { defineConfig } from "astro/config";
 
 import { rigel } from "@rigel-cms/rigel";
 import schema from "./src/content/schema";
+import { multilingual } from "./src/multilang.mjs";
 
 const postFields = [
   { key: "title", label: "Article title", type: "string" },
@@ -14,6 +15,7 @@ export default defineConfig({
   vite: { server: { watch: { ignored: ["**/_temp/**"] } } },
   integrations: [
     rigel({
+      ...(multilingual ? { contentLocales: { defaultLocale: "en", locales: [{ code: "en", label: "English" }, { code: "fr", label: "Français" }] } } : {}),
       // Remove unused languages to keep the CMS browser bundle small. English is always included.
       languages: ["en", "fr", "es", "ru", "zh", "ja", "it", "de", "nl"],
       extensions: ["./src/rigel/call-to-action.ts", "./src/rigel/widgets.ts"],
@@ -29,6 +31,10 @@ export default defineConfig({
         { kind: "link", target: { kind: "pages" } },
         { kind: "link", target: { kind: "collection", name: "blog" }, label: "Blog" },
         { kind: "link", target: { kind: "collection", name: "news" }, icon: "megaphone" },
+        ...(multilingual ? [
+          { kind: "link", target: { kind: "collection", name: "articles-en" }, label: "English articles" },
+          { kind: "link", target: { kind: "collection", name: "articles-fr" }, label: "Articles français" },
+        ] : []),
         { kind: "heading", label: "Shared content" },
         { kind: "link", target: { kind: "documents", type: "author" }, icon: "users" },
         { kind: "link", target: { kind: "documents", type: "logoSet" }, icon: "images" },
@@ -43,14 +49,30 @@ export default defineConfig({
       preview: {
         documents: {
           page: { url: "/{slug}/", index: "/" },
+          ...(multilingual ? {
+            pageEn: { url: "/en/{slug}/" },
+            pageFr: { url: "/fr/{slug}/" },
+          } : {}),
         },
         collections: {
           blog: { url: "/blog/{slug}/", new: "/preview/blog/" },
           news: { url: "/news/{slug}/", new: "/preview/news/" },
+          ...(multilingual ? {
+            "articles-en": { url: "/en/articles/{slug}/", template: "/preview/articles-en/" },
+            "articles-fr": { url: "/fr/articles/{slug}/", template: "/preview/articles-fr/" },
+          } : {}),
         },
       },
       menus: { folder: "src/content/menus", maxDepth: 3 },
       collections: [
+        ...(multilingual ? ["en", "fr"].map(locale => ({
+          name: `articles-${locale}`,
+          label: locale === "en" ? "English articles" : "Articles français",
+          locale,
+          folder: `src/content/multilang/${locale}/articles`,
+          fields: postFields,
+          columns: ["title", "date", "author"],
+        })) : []),
         {
           name: "blog",
           label: "Blogs",

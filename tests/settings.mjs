@@ -150,6 +150,10 @@ try {
   await cdp("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "light" }] });
   await cdp("Page.navigate", { url: process.env.RIGEL_URL || "http://localhost:4321/rigel/" });
   await waitFor("!!document.querySelector('.user-btn')");
+  if (process.env.RIGEL_BROWSER_MULTILANG_ONLY === "true") {
+    await (await import("./multilang.mjs")).checkMultilang({ cdp, evaluate, waitFor });
+    assert.deepEqual(errors, []);
+  } else {
   const siteFile = "src/content/demo/fields.json";
   const siteOriginal = await readFile(siteFile, "utf8");
   const realSettings = await readFile("src/content/settings/site.json", "utf8");
@@ -456,7 +460,7 @@ try {
   const checkContextMenu = async allowed => {
     assert.deepEqual(await evaluate("(() => { const frame=document.querySelector('.visual-editor iframe');const targets=[document.querySelector('main input[type=text]'),document.querySelector('.settings-modal'),frame.contentDocument.body];return targets.map(target=>{const event=new target.ownerDocument.defaultView.MouseEvent('contextmenu',{bubbles:true,cancelable:true});target.dispatchEvent(event);return !event.defaultPrevented;});})()"), [allowed,allowed,allowed], 'Context menu follows Developer mode in fields, dialogs and preview');
   };
-  await waitFor("!!document.querySelector('.visual-editor iframe')?.contentDocument?.body");
+  await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
   await checkContextMenu(false);
   await evaluate("document.querySelector('.settings-pane input[type=checkbox]').click()");
   await stored("devMode", true);
@@ -622,6 +626,7 @@ try {
   assert.deepEqual(errors, []);
   console.log("PASS: high contrast light/dark, immediate persistence, normal palette restoration and reload");
   console.log("PASS: light/dark palette, system theme, native accents, control/separator borders, primary buttons and focus ring; instant settings, media sections, key reveal/clearing, preferences/reload, storage errors; mocked stock-provider browse/search/pick, imports/tracking and stale-result protection");
+  }
 } finally {
   socket?.close();
   if (chrome.pid && chrome.exitCode === null && chrome.signalCode === null) {

@@ -1,0 +1,14 @@
+---
+import Base from "../../layouts/Base.astro";
+import SectionRenderer from "../../components/SectionRenderer.astro";
+import { documents } from "virtual:rigel-content";
+
+export function getStaticPaths() {
+  return documents.filter(doc => ["pageEn", "pageFr"].includes(doc.type) && (import.meta.env.DEV || doc.data.draft !== true))
+    .map(doc => ({ params: { locale: doc.type === "pageFr" ? "fr" : "en", slug: String(doc.data.slug || doc.slug) }, props: { doc } }));
+}
+const { doc } = Astro.props;
+---
+<Base locale={Astro.params.locale} title={String(doc.data.metaTitle || doc.data.title)} description={String(doc.data.description || "")}>
+  <SectionRenderer {doc} />
+</Base>
