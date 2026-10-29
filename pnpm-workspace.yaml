@@ -1,2 +1,3 @@
 minimumReleaseAgeExclude:
   - '@rigel-cms/rigel@1.1.0'
+  - '@rigel-cms/rigel@1.2.0'

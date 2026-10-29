@@ -34,7 +34,7 @@
     "typecheck": "astro check"
   },
   "dependencies": {
-    "@rigel-cms/rigel": "1.1.0",
+    "@rigel-cms/rigel": "1.2.0",
     "astro": "^7.3.2",
     "svelte": "^5.57.0"
   },
