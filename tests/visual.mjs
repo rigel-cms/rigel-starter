@@ -180,6 +180,7 @@ try {
   assert.equal(await evaluate(`${frame}.getAttribute('sandbox')`), "allow-same-origin");
   assert.equal(await evaluate(`${frame}.contentDocument.querySelector('h1').textContent`), "A brighter perspective.");
   assert.equal(await evaluate(`${frame}.contentDocument.querySelectorAll('[data-rigel-section]').length`), 7);
+  await (await import('./section-reorder.mjs')).checkSectionReorder({ cdp, evaluate, waitFor, writes });
 
   const logoHeading = '[data-rigel-text="sections.khomelogos.heading"]';
   const originalLogoHeading = JSON.parse(originals[0]).sections.find(section => section._key === 'khomelogos').heading;
@@ -240,9 +241,12 @@ try {
   assert.deepEqual(await evaluate(`[...${frame}.contentDocument.querySelectorAll('[data-rigel-doc="page:home"][data-rigel-section]')].map(el => el.getAttribute('data-rigel-key'))`), [
     "khomehero", "khomeintro", "khomelogos", "khomework", "khomeservices", "khomejournal", "khomecta",
   ]);
-  await click('[aria-label="Move Text block up"]');
+  await evaluate("document.querySelector('.section-drag[aria-label=\"Reorder Text block\"]').focus()");
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowUp', code: 'ArrowUp' });
   await waitFor(`${frame}.contentDocument.querySelector('[data-rigel-each="sections"]').children[0].getAttribute('data-rigel-key') === 'khomeintro'`, "reorder applies to the real page");
-  await click('[aria-label="Move Text block down"]');
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowDown', code: 'ArrowDown' });
   await waitFor(`${frame}.contentDocument.querySelector('[data-rigel-each="sections"]').children[0].getAttribute('data-rigel-key') === 'khomehero'`, "reorder restores");
 
   await evaluate("document.querySelector('.add-section select').value = 'story'");

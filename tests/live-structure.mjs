@@ -29,6 +29,15 @@ export async function checkLiveStructure({ cdp, evaluate, waitFor, url }) {
     await cdp('Input.dispatchMouseEvent', { type:'mousePressed', button:'left', clickCount:1, ...position });
     await cdp('Input.dispatchMouseEvent', { type:'mouseReleased', button:'left', clickCount:1, ...position });
     await waitFor(`document.activeElement?.closest('[data-schema-path]')?.dataset.schemaPath === '${paragraph}'`, 'About paragraph click focuses that paragraph, not heading');
+    for (const touch of [false, true]) {
+      await cdp('Emulation.setTouchEmulationEnabled', { enabled: touch });
+      for (const selector of ['.structure-actions button', '.schema-item-actions button']) {
+        const boxes = await evaluate(`[...document.querySelectorAll('${selector}')].map(button => { const r = button.getBoundingClientRect(); return [r.width, r.height]; })`);
+        assert.ok(boxes.length > 0, `${selector} rendered`);
+        assert.ok(boxes.every(([width, height]) => width === (touch ? 44 : 36) && height === width), `${selector} square on ${touch ? 'touch' : 'desktop'}`);
+      }
+    }
+    await cdp('Emulation.setTouchEmulationEnabled', { enabled: false });
     await input(paragraph, 'Instant paragraph regression');
     await waitFor(`${canvas}.querySelector('[data-rigel-text="${paragraph}"]').textContent === 'Instant paragraph regression'`);
     assert.equal(await evaluate(`document.activeElement === ${field(paragraph)}.querySelector('textarea')`), true, 'Typing does not move focus');
