@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { openProperties } from './editor-controls.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 
 export async function checkCollectionVisual({ cdp, evaluate, waitFor }) {
@@ -16,6 +17,7 @@ export async function checkCollectionVisual({ cdp, evaluate, waitFor }) {
     await waitFor(`!![...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)})`);
     await evaluate(`[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)}).querySelector('.table-link').click()`);
     await waitFor("document.querySelector('.visual-editor .canvas-stage')?.dataset.ready === 'true'");
+    await openProperties({ evaluate, waitFor });
   };
   const input = (selector, value) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const frame = "document.querySelector('.visual-editor iframe')";
@@ -56,6 +58,7 @@ export async function checkCollectionVisual({ cdp, evaluate, waitFor }) {
       await click('[aria-label="Toggle properties panel"]');
       await waitFor("!document.querySelector('.collection-panel')");
       await evaluate("[...document.querySelectorAll('.mode-toggle button')].find(button => button.textContent === 'Edit').click()");
+      await openProperties({ evaluate, waitFor });
       await waitFor("!!document.querySelector('.collection-panel')");
       await evaluate(`${frame}.contentDocument.querySelector('h1').click()`);
       await waitFor("document.activeElement?.closest('[data-collection-field]')?.dataset.collectionField === 'title'");

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { openProperties } from './editor-controls.mjs';
 import { readFile, writeFile, rm, access } from 'node:fs/promises';
 
 export async function checkAuthors({ cdp, evaluate, waitFor }) {
@@ -13,6 +14,7 @@ export async function checkAuthors({ cdp, evaluate, waitFor }) {
     await waitFor("!!document.querySelector('tbody .table-link')");
     await evaluate(`[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)}).querySelector('.table-link').click()`);
     await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
+    await openProperties({ evaluate, waitFor });
   };
   const choose = async ids => {
     await evaluate(`(() => { const el = document.querySelector('[data-collection-field="author"] select'); for (const option of el.options) option.selected = ${JSON.stringify(ids)}.includes(option.value); el.dispatchEvent(new Event('change', { bubbles: true })); })()`);

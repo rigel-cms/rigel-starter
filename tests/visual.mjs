@@ -1,5 +1,6 @@
 import "./local-only.mjs";
 import { checkLiveStructure } from './live-structure.mjs';
+import { openProperties, chooseSelect } from './editor-controls.mjs';
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -93,8 +94,9 @@ try {
     throw new Error(`Timed out waiting for ${label}`);
   };
   const reloadEditor = async () => {
+    await evaluate("window.visualBeforeReload = true");
     await cdp("Page.navigate", { url });
-    await waitFor("!!document.querySelector('[data-doctype=author]')", "editor reload");
+    await waitFor("!window.visualBeforeReload && !!document.querySelector('[data-doctype=author]')", "editor reload");
   };
   const click = (selector) => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
   const frame = "document.querySelector('.visual-editor iframe')";
@@ -142,7 +144,8 @@ try {
   const validationFile = 'src/content/pages/getting-started.json';
   const validationOriginal = await readFile(validationFile, 'utf8');
   for (const heading of ['Valid sibling heading', '']) {
-    await evaluate("(() => { const select = document.querySelector('.add-section select'); select.value = 'textBlock'; select.dispatchEvent(new Event('change', { bubbles: true })); })()");
+    await openProperties({ evaluate, waitFor });
+    await chooseSelect({ evaluate, waitFor }, '.add-section [role=combobox]', 'Text block');
     await click('.add-section button.outlined');
     await evaluate("[...document.querySelectorAll('.structure-row')].at(-1).click()");
     await waitFor("!!document.querySelector('.section-properties input[type=text]')");
@@ -249,8 +252,8 @@ try {
   await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowDown', code: 'ArrowDown' });
   await waitFor(`${frame}.contentDocument.querySelector('[data-rigel-each="sections"]').children[0].getAttribute('data-rigel-key') === 'khomehero'`, "reorder restores");
 
-  await evaluate("document.querySelector('.add-section select').value = 'story'");
-  await evaluate("document.querySelector('.add-section select').dispatchEvent(new Event('change', { bubbles: true }))");
+  await openProperties({ evaluate, waitFor });
+  await chooseSelect({ evaluate, waitFor }, '.add-section [role=combobox]', 'Story');
   await click(".add-section button.outlined");
   await waitFor(`${frame}.contentDocument.querySelectorAll('[data-rigel-section="story"]').length === 1`, "new section renders before Save");
   await evaluate("[...document.querySelectorAll('.structure-actions [aria-label^=\"Remove Story\"]')].at(-1).click()");
@@ -283,8 +286,8 @@ try {
   await reloadEditor();
 
   await openPage("Home");
-  await evaluate("document.querySelector('.add-section select').value = 'textBlock'");
-  await evaluate("document.querySelector('.add-section select').dispatchEvent(new Event('change', { bubbles: true }))");
+  await openProperties({ evaluate, waitFor });
+  await chooseSelect({ evaluate, waitFor }, '.add-section [role=combobox]', 'Text block');
   await click(".add-section button.outlined");
   await waitFor(`${frame}.contentDocument.querySelectorAll('[data-rigel-section="textBlock"]').length === 2`, "new section visible before Save");
   await evaluate("[...document.querySelectorAll('.structure-row')].at(-1).click()");
@@ -331,6 +334,7 @@ try {
   await click(".titlebar .primary");
   await waitFor("!!document.querySelector('.action-dialog[open] input')", "new page dialog");
   await inputValue("document.querySelector('.action-dialog input')", "Studio Notes");
+  await chooseSelect({ evaluate, waitFor }, '.action-dialog [role=combobox]', 'Core');
   await evaluate("document.querySelector('.action-dialog form').requestSubmit()");
   await waitFor("document.querySelector('.titlebar h2')?.textContent === 'Studio Notes'", "new page draft");
   await waitFor("document.querySelector('.visual-canvas .visual-error')?.textContent.includes('New page')", "new page notice");

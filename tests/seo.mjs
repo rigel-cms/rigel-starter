@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { openProperties } from './editor-controls.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 
 export async function checkSeo({ cdp, evaluate, waitFor }) {
@@ -18,6 +19,7 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
     if (item.drafted) assert.equal(await evaluate(`!![...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(item.slug)}).querySelector('.badge')`), true, 'Saved drafts are marked in page lists');
     await evaluate(`[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(item.slug)}).querySelector('.table-link').click()`);
     await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
+    await openProperties({ evaluate, waitFor });
   };
   const input = (selector, value) => evaluate(`(() => { const input = document.querySelector(${JSON.stringify(selector)}); input.value = ${JSON.stringify(value)}; input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const checkScroll = async () => {

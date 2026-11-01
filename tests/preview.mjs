@@ -1,4 +1,5 @@
 import "./local-only.mjs";
+import { openProperties } from './editor-controls.mjs';
 import assert from "node:assert/strict";
 import { testPreviewResize } from './preview-resize.mjs';
 import { spawn } from "node:child_process";
@@ -163,6 +164,7 @@ try {
   }
   await openArticle();
   await preview('A calmer way to publish a website');
+  await openProperties({ evaluate, waitFor });
   assert.equal(await evaluate("document.querySelector('.visual-live').getAttribute('href')"), '/blog/first-post/');
   assert.equal(await evaluate("document.querySelector('.visual-live').target"), '_blank');
   assert.equal(await evaluate("(() => { const link = document.querySelector('.visual-live').getBoundingClientRect(), toggle = document.querySelector('[aria-label=\"Toggle properties panel\"]').getBoundingClientRect(); return toggle.left - link.right === parseFloat(getComputedStyle(document.documentElement).fontSize) * 0.75; })()"), true);
@@ -206,6 +208,7 @@ try {
     const post=manifest.collections.find(c=>c.name===collection).posts[0];
     await open(`[data-collection=${collection}]`,post.frontmatter.title);
     await preview(post.frontmatter.title);
+    await openProperties({ evaluate, waitFor });
     await evaluate(`window.postDoc=${frame}.contentDocument`);
     await waitFor("!!document.querySelector('.block-content')");
     await selectBody();

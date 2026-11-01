@@ -176,7 +176,7 @@ try {
   assert.match(published, /class="article-callout/);
   await frameClick('[data-rigel-richtext="$body"] > p');
   await waitFor(`!!${doc}.querySelector('.block-content')`);
-  await frameClick('.block-content > p:last-child');
+  await evaluate(`(() => { const root = ${doc}.querySelector('.block-content'), range = ${doc}.createRange(); root.focus(); range.selectNodeContents(root.querySelector(':scope > p:last-child')); range.collapse(false); const selection = ${doc}.getSelection(); selection.removeAllRanges(); selection.addRange(range); })()`);
   await cdp('Input.insertText', { text: '/warning' });
   await waitFor(`${doc}.querySelector('.block-slash:popover-open')?.textContent.includes('Insert warning')`);
   await key('Enter', 13);

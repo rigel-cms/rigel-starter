@@ -1,4 +1,5 @@
 import './local-only.mjs';
+import { chooseSelect, openProperties } from './editor-controls.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -300,6 +301,7 @@ try {
     if (!row) throw new Error('Missing launch-week fixture');
     row.querySelector('.table-link').click();
   });
+  await openProperties({ evaluate, waitFor });
   await waitFor("!!document.querySelector('.body-toolbar [data-media-trigger]')");
   await focus('.body-toolbar [data-media-trigger]'); fits(await geometry()); await snapshot('editor-toolbar');
   await evaluate("document.querySelector('.body-toolbar [data-media-trigger]').click()");
@@ -317,8 +319,9 @@ try {
   await evaluate("document.querySelector('.user-btn').click()");
   await evaluate("[...document.querySelectorAll('.user-menu button')].find(button=>button.textContent.includes('Settings')).click()");
   await waitFor("!!document.querySelector('.settings-nav')");
-  await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Editor').click()");
-  await evaluate("document.querySelector('.settings-pane input[value=inline]').click();document.querySelector('.settings-head .close').click()");
+  await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Content').click()");
+  await chooseSelect({ evaluate, waitFor }, '.settings-pane [role=combobox]', 'Inline preview');
+  await evaluate("document.querySelector('.settings-head .close').click()");
   await waitFor("document.querySelector('.canvas-stage')?.dataset.ready==='true'");
   const inlineDoc = "document.querySelector('.visual-editor iframe').contentDocument";
   await waitFor(`!!${inlineDoc}?.querySelector('[data-rigel-richtext="$body"] p')`);
@@ -327,6 +330,8 @@ try {
   await cdp('Input.dispatchMouseEvent', {type:'mouseReleased',...pointer,button:'left',clickCount:1});
   await waitFor(`!!${inlineDoc}.querySelector('.block-content')`);
   await evaluate(`{const doc=${inlineDoc},root=doc.querySelector('.block-content'),range=doc.createRange();root.focus();range.selectNodeContents(root.querySelector('p'));const selection=doc.defaultView.getSelection();selection.removeAllRanges();selection.addRange(range);}`);
+  await key('End', 'End', 35);
+  await key('Enter', 'Enter', 13);
   await waitFor(`!!${inlineDoc}.querySelector('.body-toolbar:not([hidden]) [data-media-trigger]')`);
   const trigger = await evaluate(`(() => {const frame=document.querySelector('.visual-editor iframe'),element=frame.contentDocument.querySelector('.body-toolbar:not([hidden]) [data-media-trigger]'),rect=element.getBoundingClientRect(),box=frame.getBoundingClientRect(),scale=box.width/frame.clientWidth;return {x:box.left+(rect.left+rect.width/2)*scale,y:box.top+(rect.top+rect.height/2)*scale};})()`);
   await mouse(trigger.x, trigger.y);

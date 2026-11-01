@@ -1,4 +1,5 @@
 import "./local-only.mjs";
+import { chooseSelect, openProperties } from './editor-controls.mjs';
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -71,6 +72,7 @@ try {
     await click(`[data-collection=${collection}]`);
     await waitFor("!!document.querySelector('tbody .table-link')");
     await evaluate(`[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)}).querySelector('.table-link').click()`);
+    await openProperties({ evaluate, waitFor });
   };
   const checkEmbed = async () => {
     await waitFor("!!document.querySelector('.block-content figure[data-rigel-embed=youtube] img')");
@@ -87,6 +89,10 @@ try {
       await cdp('Input.dispatchMouseEvent', {type:'mouseReleased',...point,button:'left',clickCount:1});
   };
   const openMediaMenu = async doc => {
+    await evaluate(`(() => { const root = ${doc}.querySelector('.block-content'), range = ${doc}.createRange(); root.focus(); range.selectNodeContents(root); range.collapse(false); const selection = ${doc}.getSelection(); selection.removeAllRanges(); selection.addRange(range); })()`);
+    await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await waitFor(`!!${doc}.querySelector('.body-toolbar:not([hidden]) [data-media-trigger]')`);
     await mouseClick(doc, '.body-toolbar [data-media-trigger]');
     await waitFor(`!!${doc}.querySelector('.media-menu:popover-open')`);
     assert.equal(await evaluate(`(() => {const doc=${doc},button=doc.querySelector('.body-toolbar [data-media-trigger]').getBoundingClientRect(),menu=doc.querySelector('.media-menu:popover-open').getBoundingClientRect(),view=doc.defaultView,left=Math.max(8,Math.min(button.left,view.innerWidth-menu.width-8)),top=button.bottom+4+menu.height<=view.innerHeight-8?button.bottom+4:Math.max(8,button.top-menu.height-4);return Math.abs(menu.left-left)<1 && Math.abs(menu.top-top)<1 && menu.right<=view.innerWidth-7 && menu.bottom<=view.innerHeight-7;})()`), true, 'Media menu is anchored to the clicked button and fits the viewport');
@@ -325,8 +331,8 @@ try {
   await click('.user-btn');
   await evaluate("[...document.querySelectorAll('.user-menu button')].find(button=>button.textContent.includes('Settings')).click()");
   await waitFor("!!document.querySelector('.settings-nav')");
-  await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Editor').click()");
-  await click('.settings-pane input[value=inline]');
+  await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Content').click()");
+  await chooseSelect({ evaluate, waitFor }, '.settings-pane [role=combobox]', 'Inline preview');
   await click('.settings-head .close');
   await waitFor("document.querySelector('.canvas-stage')?.dataset.ready==='true'");
   const frameDoc = "document.querySelector('.visual-editor iframe').contentDocument";

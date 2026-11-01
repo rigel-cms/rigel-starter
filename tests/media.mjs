@@ -125,7 +125,7 @@ try {
   }
   const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
   const editor = label => `[contenteditable=true][aria-label="${label}"]`;
-  const root = label => `document.querySelector(${JSON.stringify(editor(label))}).closest('.markdown-editor')`;
+  const root = label => `document.querySelector(${JSON.stringify(`[aria-label="${label}"], [aria-label="${label} Markdown source"]`)}).closest('.markdown-editor')`;
   const button = (label, text) => evaluate(`[...${root(label)}.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || b.textContent.trim()) === ${JSON.stringify(text)}).click()`);
   const format = (label, value) => evaluate(`(() => { const el = ${root(label)}.querySelector('select[aria-label="Text style"]'); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('change', {bubbles: true})); })()`);
   const source = label => evaluate(`${root(label)}.querySelector('textarea').value`);

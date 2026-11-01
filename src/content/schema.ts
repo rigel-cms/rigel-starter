@@ -62,6 +62,7 @@ const schema = defineSchema({
       fields: [
         { ...titleField, label: "Page name" },
         { key: "draft", label: "Draft", type: "boolean" },
+        { key: "darkTheme", label: "Dark theme", type: "boolean", initialValue: false },
         { key: "metaTitle", label: "SEO title", type: "string" },
         { key: "description", label: "SEO description", type: "text" },
         {
@@ -318,6 +319,28 @@ if (multilingual) {
       template: sections.map(type => ({ type })),
     }));
   }
+}
+
+for (const locale of [undefined, ...(multilingual ? ["en", "fr"] : [])]) {
+  const page = schema.documents.find(document => document.name === "page")!;
+  const french = locale === "fr";
+  const sections = ["pageIntro", "articleText"];
+  schema.documents.push(defineDocument({
+    ...page,
+    name: `legalPage${locale ? locale === "fr" ? "Fr" : "En" : ""}`,
+    title: `Legal pages${locale ? ` (${locale})` : ""}`,
+    category: "Legal",
+    ...(locale ? { locale } : {}),
+    folder: locale ? `src/content/multilang/${locale}/legal` : "src/content/legal",
+    fields: page.fields.map(field => field.key === "sections" ? {
+      ...field,
+      items: sections.map(name => ({ type: "object" as const, name })),
+    } : field),
+    template: [
+      { type: "pageIntro", values: { eyebrow: "Legal", title: french ? "Informations légales" : "Legal information", body: french ? "Exemple de mise en page, à adapter avant publication." : "A layout example to adapt before publication." } },
+      { type: "articleText", values: { title: french ? "À propos de cette page" : "About this page", intro: "", subheading: "", body: french ? "Remplacez cet exemple par vos propres informations légales." : "Replace this example with your own legal information.", linkLabel: "", linkHref: "", closing: "" } },
+    ],
+  }));
 }
 
 export default schema;

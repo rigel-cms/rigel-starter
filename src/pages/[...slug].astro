@@ -1,16 +1,19 @@
 ---
-import Base from "../layouts/Base.astro";
-import SectionRenderer from "../components/SectionRenderer.astro";
+import Page from "../components/Page.astro";
+import schema from "../content/schema";
+import { effectiveSlug } from "@rigel-cms/rigel/content";
 import { documents } from "virtual:rigel-content";
 
 export function getStaticPaths() {
   return documents
-    .filter((doc) => doc.type === "page" && (import.meta.env.DEV || doc.data.draft !== true))
-    .map((doc) => ({ params: { slug: doc.slug === "home" ? undefined : doc.slug }, props: { doc } }));
+    .filter(doc => schema.documents.some(type => type.name === doc.type && !type.shared && !type.locale) && (import.meta.env.DEV || doc.data.draft !== true))
+    .map(doc => {
+      const category = schema.documents.find(type => type.name === doc.type)?.category;
+      const slug = effectiveSlug(doc.data, doc.slug);
+      return { params: { slug: category ? `${category.toLowerCase()}/${slug}` : slug === "home" ? undefined : slug }, props: { doc } };
+    });
 }
 
 const { doc } = Astro.props;
 ---
-<Base title={String(doc.data.metaTitle ?? "").trim() || String(doc.data.title)} description={String(doc.data.description ?? "").trim() || undefined} ogImage={String(doc.data.ogImage ?? "").trim() || undefined}>
-  <SectionRenderer {doc} />
-</Base>
+<Page {doc} />

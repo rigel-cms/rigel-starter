@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { chooseSelect, openProperties } from './editor-controls.mjs';
 import { readFile, writeFile } from "node:fs/promises";
 
 export async function checkMultilang({ cdp, evaluate, waitFor }) {
@@ -80,6 +81,13 @@ export async function checkMultilang({ cdp, evaluate, waitFor }) {
     await waitFor("!document.querySelector('.rigel').classList.contains('sidebar-collapsed')");
     await switchTo('English');
     await assertPages('en');
+    await click('.user-btn');
+    await waitFor("!!document.querySelector('.user-menu')");
+    await evaluate("[...document.querySelectorAll('.user-menu button')].find(button => button.textContent.trim() === 'Settings').click()");
+    await waitFor("!!document.querySelector('.settings-modal')");
+    await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button => button.textContent.trim() === 'Content').click()");
+    await chooseSelect({ evaluate, waitFor }, '.settings-pane .custom-select:nth-of-type(2) [role=combobox]', 'Current content language');
+    await click('.settings-head .close');
     await search('studio', 'English studio', 'Le studio français');
     await search('Publishing', 'Publishing for two audiences', 'Publier pour deux publics');
     await switchTo('Français');
@@ -92,7 +100,7 @@ export async function checkMultilang({ cdp, evaluate, waitFor }) {
     await waitFor("!!document.querySelector('.user-menu')");
     await evaluate("[...document.querySelectorAll('.user-menu button')].find(button => button.textContent.trim() === 'Settings').click()");
     await waitFor("!!document.querySelector('.settings-modal')");
-    await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button => button.textContent.trim() === 'Language').click()");
+    await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button => button.textContent.trim() === 'Interface').click()");
     await waitFor("!!document.querySelector('.settings-modal input[value=fr]')");
     await click('.settings-modal input[value=fr]');
     await waitFor("JSON.parse(localStorage.getItem('rigelcms.settings')).language === 'fr'");
@@ -117,7 +125,7 @@ export async function checkMultilang({ cdp, evaluate, waitFor }) {
       await evaluate(`[...document.querySelectorAll('.unsaved-dialog button')].find(button => button.textContent.trim() === ${JSON.stringify(choice)}).click()`);
       await waitFor("!document.querySelector('.unsaved-dialog[open]')");
     };
-    const openPage = async title => { await pages(); await row(title); await waitFor(`!!document.querySelector(${JSON.stringify(titleField)})`); };
+    const openPage = async title => { await pages(); await row(title); await openProperties({ evaluate, waitFor }); await waitFor(`!!document.querySelector(${JSON.stringify(titleField)})`); };
     await openPage('Le studio français');
     await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
     const frame = "document.querySelector('.visual-editor iframe').contentDocument";
@@ -158,6 +166,7 @@ export async function checkMultilang({ cdp, evaluate, waitFor }) {
     await click('[data-collection=articles-fr]');
     await waitFor("document.querySelector('tbody')?.textContent.includes('Publier pour deux publics')");
     await row('Publier pour deux publics');
+    await openProperties({ evaluate, waitFor });
     await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
     assert.equal(await evaluate(`${frame}.querySelector('h1').textContent.trim()`), 'Publier pour deux publics');
     assert.equal(await evaluate("new URL(document.querySelector('.visual-live').href).pathname"), '/fr/articles/publishing/');

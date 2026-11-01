@@ -1,3 +1,4 @@
+import { openProperties, chooseSelect } from './editor-controls.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
@@ -9,8 +10,9 @@ export async function checkLiveStructure({ cdp, evaluate, waitFor, url }) {
   const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
   const field = path => `document.querySelector('.section-properties [data-schema-path="${path}"]')`;
   const input = (path, value) => evaluate(`(() => { const el = ${field(path)}.querySelector('input[type=text],textarea'); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('input', { bubbles:true })); })()`);
-  const add = async type => {
-    await evaluate(`(() => { const select = document.querySelector('.add-section select'); select.value = ${JSON.stringify(type)}; select.dispatchEvent(new Event('change', { bubbles:true })); })()`);
+  const add = async (type, label) => {
+    await openProperties({ evaluate, waitFor });
+    await chooseSelect({ evaluate, waitFor }, '.add-section [role=combobox]', label);
     await click('.add-section button.outlined');
     await waitFor("document.querySelector('.structure-list li:last-child')?.classList.contains('active')");
     const key = await evaluate("document.querySelector('.section-properties [data-schema-path]').dataset.schemaPath.split('.')[1]");
@@ -66,7 +68,7 @@ export async function checkLiveStructure({ cdp, evaluate, waitFor, url }) {
 
     const manifest = await evaluate("fetch('/rigel/manifest.json').then(r => r.json())");
     for (const type of manifest.schema.objects.filter(object => object.type === 'section')) {
-      const section = await add(type.name);
+      const section = await add(type.name, type.title);
       if (type.name === 'textBlock' || type.name === 'journal') {
         await input(`sections.${section}.linkLabel`, 'Optional link appears');
         await waitFor(`!${canvas}.querySelector('[data-rigel-if="sections.${section}.linkLabel"]').hidden`, `${type.name}: optional link appears`);

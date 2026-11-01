@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { openProperties } from './editor-controls.mjs';
 import { writeFile } from "node:fs/promises";
 
 export async function checkUnsaved({ cdp, evaluate, waitFor }) {
@@ -18,7 +19,10 @@ export async function checkUnsaved({ cdp, evaluate, waitFor }) {
       await waitFor(`[...document.querySelectorAll('tbody tr')].some(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)})`);
       await evaluate(`[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)}).querySelector('.table-link').click()`);
     } else await click('.table-link');
-    if (selector !== '#nav-menus') await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
+    if (selector !== '#nav-menus') {
+      await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
+      await openProperties({ evaluate, waitFor });
+    }
   };
   const checkPosition = async () => assert.equal(await evaluate("(() => { const r = document.querySelector('dialog[open] .rigel-modal').getBoundingClientRect(); return Math.abs(r.x + r.width / 2 - innerWidth / 2) < 1 && Math.abs(r.y - innerHeight * 0.1) < 1 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth; })()"), true, 'Confirmation modals align with the search palette and fit the viewport');
   await evaluate(`window.explicitWrites = []; window.explicitOriginalFetch = window.fetch; window.fetch = async (...args) => {
@@ -136,6 +140,7 @@ export async function checkUnsaved({ cdp, evaluate, waitFor }) {
       await waitFor("!!document.querySelector('.table-link')");
       await evaluate("[...document.querySelectorAll('.table-link')].find(b => b.textContent === 'Unsaved creation').click()");
       await waitFor("!!document.querySelector('[aria-label=\"Delete post\"]')");
+      await openProperties({ evaluate, waitFor });
       const before = await count();
       await click('[aria-label="Delete post"]');
       await waitFor("!!document.querySelector('.action-dialog[open]')");

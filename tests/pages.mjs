@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { openProperties } from './editor-controls.mjs';
 import { writeFile } from "node:fs/promises";
 
 export async function checkPages({ cdp, evaluate, waitFor }) {
@@ -9,7 +10,8 @@ export async function checkPages({ cdp, evaluate, waitFor }) {
   assert.equal(await evaluate("!!document.querySelector('.content-header')"), false);
   await evaluate("document.querySelector('#nav-pages').click()");
   await waitFor("document.querySelector('main h2')?.textContent === 'All pages'");
-  assert.equal(await evaluate("document.querySelectorAll('tbody tr').length"), manifest.pages.filter(page => !page.shared).length + manifest.documents.filter(doc => doc.type === "page").length);
+  const pageDocuments = manifest.documents.filter(doc => !manifest.schema.documents.find(type => type.name === doc.type).shared);
+  assert.equal(await evaluate("document.querySelectorAll('tbody tr').length"), manifest.pages.filter(page => !page.shared).length + pageDocuments.length);
   assert.equal(await evaluate("[...document.querySelectorAll('.table-link')].some(button => button.textContent.trim() === 'Footer')"), false);
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.sidebar-heading')].map(heading => heading.textContent)"), ['Website', 'Shared content', 'Assets']);
   assert.equal(await evaluate("document.querySelectorAll('.rail-scroll .count, #nav-all').length"), 0, 'Sidebar contains labels only, without counts or All content');
@@ -52,7 +54,7 @@ export async function checkPages({ cdp, evaluate, waitFor }) {
   await checkColumns();
   await evaluate("document.querySelectorAll('.table-sort')[1].click(); document.querySelectorAll('.table-sort')[1].click()");
   await waitFor("document.querySelectorAll('th')[1].getAttribute('aria-sort') === 'descending'");
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('tbody tr')].map(r => r.cells[1].textContent.trim())"), [...manifest.pages.filter(page => !page.shared).map(p => p.slug), ...manifest.documents.filter(doc => doc.type === "page").map(doc => doc.slug)].sort((a, b) => b.localeCompare(a)));
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('tbody tr')].map(r => r.cells[1].textContent.trim())"), [...manifest.pages.filter(page => !page.shared).map(p => p.slug), ...pageDocuments.map(doc => doc.slug)].sort((a, b) => b.localeCompare(a)));
   await evaluate("document.querySelector('.table-link').focus()");
   await cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" });
   await cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
@@ -88,6 +90,7 @@ export async function checkPages({ cdp, evaluate, waitFor }) {
         { ...sample, slug: 'standalone', label: 'Standalone', category: undefined }
       ];
       manifest.documents = [];
+      manifest.schema.documents = manifest.schema.documents.map(type => ({ ...type, category: undefined }));
       delete manifest.sidebar;
       return Response.json(manifest);
     };
@@ -197,6 +200,7 @@ export async function checkEditorActions({ cdp, evaluate, waitFor }) {
   await click('#nav-pages');
   await waitFor("!!document.querySelector('tbody .table-link')");
   await evaluate("[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === 'about').querySelector('.table-link').click()");
+  await openProperties({ evaluate, waitFor });
   await waitFor("!!document.querySelector('.document-properties input[type=text]')");
   await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
   await evaluate("(() => { const input = document.querySelector('.document-properties input[type=text]'); input.value += ' action-row check'; input.dispatchEvent(new Event('input', {bubbles:true})); })()");

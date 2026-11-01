@@ -1,4 +1,5 @@
 import "./local-only.mjs";
+import { openProperties } from './editor-controls.mjs';
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -311,6 +312,7 @@ try {
   await evaluate("document.querySelector('#nav-pages').click()");
   await waitFor("!![...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === 'contact')");
   await evaluate("[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === 'contact').querySelector('.table-link').click()");
+  await openProperties({ evaluate, waitFor });
   await waitFor("!!document.querySelector('main input[type=text]')");
   await waitFor("document.querySelector('.brand img')?.complete && document.querySelector('.brand img').naturalWidth > 0");
   assert.equal(await evaluate("document.querySelector('.brand span').textContent"), "Rigel CMS");
@@ -367,6 +369,7 @@ try {
     await evaluate("document.querySelector('#nav-pages').click()");
     await waitFor("!!document.querySelector('.table-link')");
     await evaluate("[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === 'contact').querySelector('.table-link').click()");
+    await openProperties({ evaluate, waitFor });
     await waitFor("!!document.querySelector('main input[type=text]')");
   };
   await checkColors("light");
@@ -415,7 +418,7 @@ try {
   assert.equal(await evaluate("document.querySelector('.settings-pane select')"), null);
   assert.equal(await evaluate("document.querySelector('.settings-pane').textContent.includes('Stock Photo Service API Keys')"), true);
   for (const theme of ["light", "dark"]) {
-    await pane("Appearance");
+    await pane("Interface");
     await evaluate(`document.querySelector('input[value=${theme}]').click()`);
     await stored("theme", theme);
     await pane("Advanced");
@@ -424,7 +427,7 @@ try {
     const shot = await cdp("Page.captureScreenshot", { format: "png" });
     await writeFile(`_temp/settings-media-${theme}.png`, Buffer.from(shot.data, "base64"));
   }
-  await pane("Appearance");
+  await pane("Interface");
   await evaluate("document.querySelector('input[value=light]').click()");
   await stored("theme", "light");
   await pane("Media");
@@ -449,7 +452,7 @@ try {
     await input(selector, "");
     await waitFor(`!JSON.parse(localStorage.getItem('rigelcms.settings')).apiKeys.${key}`);
   }
-  await pane("Language");
+  await pane("Interface");
   await checkAlignment();
   for (const language of ["es", "ru", "en"]) {
     await evaluate(`document.querySelector('input[value=${language}]').click()`);
@@ -567,6 +570,7 @@ try {
   await evaluate("document.querySelector('#nav-pages').click()");
   await waitFor("!!document.querySelector('.table-link')");
   await evaluate("document.querySelector('.table-link').click()");
+  await openProperties({ evaluate, waitFor });
   await waitFor("!!document.querySelector('main input[type=text]')");
   await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
   await evaluate(`(() => {
@@ -588,6 +592,7 @@ try {
   await evaluate("document.querySelector('#nav-pages').click()");
   await waitFor("!!document.querySelector('.table-link')");
   await evaluate("document.querySelector('.table-link').click()");
+  await openProperties({ evaluate, waitFor });
   await waitFor("!!document.querySelector('main input[type=text]')");
   assert.equal(await evaluate("document.querySelector('main input[type=text]').value.includes('unsaved test draft')"), false);
   assert.deepEqual(errors, []);

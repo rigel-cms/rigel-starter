@@ -1,3 +1,4 @@
+import { openProperties, chooseSelect } from './editor-controls.mjs';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 
@@ -20,7 +21,8 @@ export async function checkSectionDefaults({ cdp, evaluate, waitFor }) {
     const types = manifest.schema.objects.filter(type => type.type === 'section');
     const keys = [];
     for (const type of types) {
-      await evaluate(`(() => { const select = document.querySelector('.add-section select'); select.value = ${JSON.stringify(type.name)}; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+      await openProperties({ evaluate, waitFor });
+      await chooseSelect({ evaluate, waitFor }, '.add-section [role=combobox]', type.title);
       await click('.add-section button.outlined');
       await waitFor(`document.querySelectorAll('.structure-row').length === ${baseline.sections.length + keys.length + 1} && document.querySelector('.structure-list li:last-child').classList.contains('active')`);
       const key = await evaluate("document.querySelector('.section-properties [data-schema-path]').dataset.schemaPath.split('.')[1]");
@@ -41,6 +43,7 @@ export async function checkSectionDefaults({ cdp, evaluate, waitFor }) {
     await cdp('Page.reload');
     await waitFor("document.documentElement.dataset.rigelTestReload !== 'pending'");
     await open();
+    await openProperties({ evaluate, waitFor });
     assert.equal(await evaluate("document.querySelectorAll('.structure-row').length"), baseline.sections.length + types.length);
     assert.equal(await evaluate("document.querySelector('.save-button').disabled"), true, 'Saved starter sections reload clean');
     console.log(`PASS: all ${types.length} section types add with starter content, auto-open/focus/scroll, no autosave, Save/file/public rendering/reload and existing-section preservation`);

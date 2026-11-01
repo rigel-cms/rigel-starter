@@ -1,4 +1,5 @@
 import "./local-only.mjs";
+import { chooseSelect, openProperties } from './editor-controls.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -73,6 +74,7 @@ try {
     await waitFor(`!!document.querySelector('[data-collection=${collection}]')`); await click(`[data-collection=${collection}]`);
     await waitFor("!!document.querySelector('tbody .table-link')");
     await evaluate(`[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)}).querySelector('.table-link').click()`);
+    await openProperties({ evaluate, waitFor });
     await waitFor("document.querySelector('.block-content')?.children.length > 0 && document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
   };
   await cdp('Page.addScriptToEvaluateOnNewDocument', { source: "localStorage.setItem('rigelcms.settings',JSON.stringify({theme:'light',devMode:true,userPref:{editorExperience:'sidebar'}})); window.alert=window.confirm=window.prompt=()=>{throw Error('No native dialogs')};" });
@@ -319,8 +321,8 @@ try {
     await click('.user-btn');
     await evaluate("[...document.querySelectorAll('.user-menu button')].find(button=>button.textContent.includes('Settings')).click()");
     await waitFor("!!document.querySelector('.settings-nav')");
-    await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Editor').click()");
-    await click(`.settings-pane input[value=${experience}]`);
+    await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Content').click()");
+    await chooseSelect({ evaluate, waitFor }, '.settings-pane [role=combobox]', experience === 'inline' ? 'Inline preview' : 'Sidebar');
     await click('.settings-head .close');
   };
   for (const experience of ['sidebar','inline']) {

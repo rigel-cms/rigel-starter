@@ -1,0 +1,22 @@
+{
+  "_id": "page:perspective",
+  "_type": "page",
+  "title": "Perspective",
+  "slug": "perspective",
+  "sections": [
+    {
+      "_key": "kexampleintro",
+      "_type": "pageIntro",
+      "eyebrow": "Perspective",
+      "title": "A different perspective",
+      "body": "The same editing tools, in a dark page layout."
+    },
+    {
+      "_key": "kexamplebody",
+      "_type": "textBlock",
+      "heading": "Your next idea",
+      "body": "Replace this text with your story."
+    }
+  ],
+  "darkTheme": true
+}

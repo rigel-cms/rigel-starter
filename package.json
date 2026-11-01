@@ -20,7 +20,7 @@
   },
   "homepage": "https://rigelcms.dev",
   "type": "module",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "engines": {
     "node": ">=24 <25"
   },
@@ -29,12 +29,12 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "test": "node tests/media-assets.mjs && node tests/content.mjs && node scripts/verify-site.mjs && node tests/multilang-content.mjs",
+    "test": "node tests/media-assets.mjs && node tests/content.mjs && node scripts/verify-site.mjs && node tests/multilang-content.mjs && node tests/page-templates.mjs",
     "test:browser": "node scripts/test-browser.mjs",
     "typecheck": "astro check"
   },
   "dependencies": {
-    "@rigel-cms/rigel": "1.3.0",
+    "@rigel-cms/rigel": "1.4.0",
     "astro": "^7.3.2",
     "svelte": "^5.57.0"
   },

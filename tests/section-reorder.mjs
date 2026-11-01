@@ -35,6 +35,20 @@ export async function checkSectionReorder({ cdp, evaluate, waitFor, writes }) {
   assert.equal(await evaluate("document.querySelector('.section-drag').nextElementSibling.matches('.structure-row') && !!document.querySelector('.section-drag svg')"), true, 'Real icon grip precedes name');
   assert.match(await evaluate("document.querySelector('#section-reorder-hint').textContent"), /Arrow Up.*Arrow Down.*Escape/);
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.section-drag')).cursor"), 'grab');
+  assert.equal(await evaluate(`(() => {
+    const list = document.querySelector('.structure-list'), label = list.querySelector('.structure-row > span');
+    const original = label.textContent, style = list.getAttribute('style');
+    const longName = 'A long section name that must stay intact while its visible label ends in an ellipsis';
+    try {
+      label.textContent = longName;
+      list.style.width = '280px';
+      const css = getComputedStyle(label), box = label.getBoundingClientRect(), row = label.closest('li');
+      return label.textContent === longName && label.scrollWidth > label.clientWidth && css.whiteSpace === 'nowrap' && css.textOverflow === 'ellipsis' && css.overflow === 'hidden' && box.height < 30 && row.scrollWidth <= row.clientWidth;
+    } finally {
+      label.textContent = original;
+      if (style === null) list.removeAttribute('style'); else list.setAttribute('style', style);
+    }
+  })()`), true, 'Long section names use single-line CSS ellipsis without changing the full name or overflowing actions');
 
   let boxes = await geometry();
   await mouse('mousePressed', boxes[1]);

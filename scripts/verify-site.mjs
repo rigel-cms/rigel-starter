@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
-const editablePages = ['about', 'blog', 'contact', 'getting-started', 'home', 'news', 'services'];
+const editablePages = (await readdir(new URL('../src/content/pages/', import.meta.url))).filter(file => file.endsWith('.json')).map(file => file.slice(0, -5)).sort();
 const currentManifest = JSON.parse(await readFile(join(dist, 'rigel/manifest.json'), 'utf8'));
 assert.deepEqual(currentManifest.documents.filter(doc => doc.type === 'page').map(doc => doc.slug).sort(), editablePages, 'every public landing page is declared in the visual editor');
 for (const slug of editablePages) {
@@ -12,7 +12,7 @@ for (const slug of editablePages) {
   assert.ok(html.includes(`data-rigel-doc="page:${slug}"`), `${slug}: document-aware visual bindings`);
   assert.match(html, /data-rigel-section=/, `${slug}: clickable sections`);
 }
-const routes = ['', 'about', 'services', 'contact', 'blog', 'news', 'getting-started', ...(currentManifest.documents.some(doc => doc.id === 'demo:fields') ? ['demo/fields'] : []), 'blog/a-different-point-of-view', 'blog/less-but-more-considered', 'blog/typography-check', 'preview/blog', 'preview/news'];
+const routes = ['', 'about', 'services', 'contact', 'blog', 'news', 'getting-started', 'legal/example', 'perspective', ...(currentManifest.documents.some(doc => doc.id === 'demo:fields') ? ['demo/fields'] : []), 'blog/a-different-point-of-view', 'blog/less-but-more-considered', 'blog/typography-check', 'preview/blog', 'preview/news'];
 for (const route of routes) {
   const html = await readFile(join(dist, route, 'index.html'), 'utf8');
   assert.match(html, /<main id="main">/, `${route}: main landmark`);
@@ -70,8 +70,15 @@ if (demo) {
   assert.ok(!manifest.schema.documents.some(type => type.demo));
 }
 const multilingual = process.env.RIGEL_CONTENT_MULTILANG === 'true';
-assert.deepEqual(manifest.documents.map(doc => doc.id).sort(), ['settings:site', ...(demo ? ['demo:fields'] : []), 'author:alex', 'author:rigel-studio', 'callout:studio', 'logoSet:brands', ...editablePages.map(slug => `page:${slug}`), ...(multilingual ? ['pageEn:welcome', 'pageFr:welcome', 'pageFr:unpublished'] : [])].sort());
-assert.deepEqual(manifest.schema.documents.map(doc => doc.name), ['settings', ...(demo ? ['demo'] : []), 'author', 'page', 'logoSet', 'callout', ...(multilingual ? ['pageEn', 'pageFr'] : [])]);
+const sourceIds = [];
+for (const type of manifest.schema.documents) {
+  for (const file of (await readdir(type.folder)).filter(file => file.endsWith('.json'))) {
+    const data = JSON.parse(await readFile(join(type.folder, file), 'utf8'));
+    sourceIds.push(data._id);
+  }
+}
+assert.deepEqual(manifest.documents.map(doc => doc.id).sort(), sourceIds.sort());
+assert.deepEqual(manifest.schema.documents.map(doc => doc.name), ['settings', ...(demo ? ['demo'] : []), 'author', 'page', 'logoSet', 'callout', ...(multilingual ? ['pageEn', 'pageFr'] : []), 'legalPage', ...(multilingual ? ['legalPageEn', 'legalPageFr'] : [])]);
 for (const collection of ['blog', 'news']) {
   for (const file of (await readdir(new URL(`../src/content/${collection}/`, import.meta.url))).filter(file => file.endsWith('.json'))) {
     const article = JSON.parse(await readFile(new URL(`../src/content/${collection}/${file}`, import.meta.url), 'utf8'));

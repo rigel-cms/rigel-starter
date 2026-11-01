@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { chooseSelect, openProperties } from './editor-controls.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 
 export async function checkInlineArticles({ cdp, evaluate, waitFor, collection = 'news', slug = 'launch-week' }) {
@@ -36,11 +37,11 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await click('.user-btn');
     await evaluate("[...document.querySelectorAll('.user-menu button')].find(button=>button.textContent.includes('Settings')).click()");
     await waitFor("!!document.querySelector('.settings-nav')");
-    await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Editor').click()");
-    await click(`.settings-pane input[value=${experience}]`);
+    await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Content').click()");
+    await chooseSelect({ evaluate, waitFor }, '.settings-pane [role=combobox]', experience === 'inline' ? 'Inline preview' : 'Sidebar');
     await waitFor(`JSON.parse(localStorage.getItem('rigelcms.settings')).userPref.editorExperience===${JSON.stringify(experience)}`);
     if (theme) {
-      await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Appearance').click()");
+      await evaluate("[...document.querySelectorAll('.settings-nav button')].find(button=>button.textContent.trim()==='Interface').click()");
       await click(`.settings-pane input[value=${theme}]`);
     }
     await click('.settings-head .close');
@@ -360,6 +361,7 @@ export async function checkInlineArticles({ cdp, evaluate, waitFor, collection =
     await evaluate("[...document.querySelectorAll('.mode-toggle button')].find(button=>button.textContent.trim()==='Browse').click()");
     await waitFor(`!${doc}.querySelector('.block-content') && ${doc}.querySelector('[data-rigel-richtext="$body"]').textContent.includes('Inline table')`);
     await evaluate("[...document.querySelectorAll('.mode-toggle button')].find(button=>button.textContent.trim()==='Edit').click()");
+    await openProperties({ evaluate, waitFor });
     await evaluate("const button=document.querySelector('[data-collection-field=\"$body\"] button');button.focus();button.click()"); await waitFor(`!!${doc}.querySelector('.block-content')`);
     assert.equal(await evaluate(`${doc}.activeElement===${doc}.querySelector('.block-content')`),true,'Sidebar action focuses the inline editor for keyboard access');
     assert.equal(await evaluate("document.querySelector('.save-button').disabled"),true,'Reactivation preserves saved state');

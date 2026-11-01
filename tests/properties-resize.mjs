@@ -1,7 +1,9 @@
+import { openProperties } from './editor-controls.mjs';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 
 export async function checkPropertiesResize({ cdp, evaluate, waitFor }) {
+  await openProperties({ evaluate, waitFor });
   await waitFor("!!document.querySelector('.properties-divider')");
   assert.equal(await evaluate("Array.from(document.querySelectorAll('.schema-panel section')).every(section => ['Top', 'Right', 'Bottom', 'Left'].every(side => getComputedStyle(section)['border' + side + 'Width'] === '0px'))"), true, 'Properties sections have no card borders');
   assert.equal(await evaluate("getComputedStyle(document.querySelector('[aria-label=\"Toggle properties panel\"] .sidebar-asset-icon')).maskImage.includes('square-half')"), true);

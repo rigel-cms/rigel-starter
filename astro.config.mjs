@@ -49,9 +49,12 @@ export default defineConfig({
       preview: {
         documents: {
           page: { url: "/{slug}/", index: "/" },
+          legalPage: { url: "/legal/{slug}/" },
           ...(multilingual ? {
             pageEn: { url: "/en/{slug}/" },
             pageFr: { url: "/fr/{slug}/" },
+            legalPageEn: { url: "/en/legal/{slug}/" },
+            legalPageFr: { url: "/fr/legal/{slug}/" },
           } : {}),
         },
         collections: {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { openProperties } from './editor-controls.mjs';
 import { writeFile } from 'node:fs/promises';
 
 export async function checkSelects({ cdp, evaluate, waitFor }) {
@@ -25,6 +26,7 @@ export async function checkSelects({ cdp, evaluate, waitFor }) {
     await waitFor("!!document.querySelector('tbody .table-link')");
     await evaluate("document.querySelector('tbody .table-link').click()");
     await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
+    await openProperties({ evaluate, waitFor });
   };
   const author = '[data-collection-field=author] button[role=combobox]';
   const clickPreview = async () => {
@@ -138,6 +140,7 @@ export async function checkSelects({ cdp, evaluate, waitFor }) {
   await waitFor("!!document.querySelector('tbody .table-link')");
   await evaluate("[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === 'home').querySelector('.table-link').click()");
   await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
+  await openProperties({ evaluate, waitFor });
   await click('.add-section button[role=combobox]');
   await waitFor("!!document.querySelector('.select-menu:popover-open')");
   await key('s');
