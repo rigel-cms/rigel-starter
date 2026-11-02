@@ -4,6 +4,9 @@ import { rigel } from "@rigel-cms/rigel";
 import schema from "./src/content/schema";
 import { multilingual } from "./src/multilang.mjs";
 
+const backend = process.env.RIGEL_BACKEND ?? (process.env.RIGEL_GITHUB_REPO ? "github" : "local");
+if (!["local", "github", "demo"].includes(backend)) throw new Error("RIGEL_BACKEND must be local, github or demo");
+
 const postFields = [
   { key: "title", label: "Article title", type: "string" },
   { key: "date", label: "Date", type: "date" },
@@ -21,7 +24,7 @@ export default defineConfig({
       extensions: ["./src/rigel/call-to-action.ts", "./src/rigel/widgets.ts"],
       copyDir: "src/content/copy",
       maxFileSize: 2 * 1024 * 1024,
-      backend: process.env.RIGEL_GITHUB_REPO ? "github" : "local",
+      backend,
       repo: process.env.RIGEL_GITHUB_REPO,
       repoRoot: "",
       demo: process.env.RIGEL_DEMO !== "false",

@@ -10,7 +10,7 @@ if (process.env.RIGEL_CONTENT_MULTILANG === "true") suites.push("multilang");
 const selected = process.argv.slice(2);
 const root = fileURLToPath(new URL("../", import.meta.url));
 for (const suite of selected.length ? selected : suites) {
-  assert.ok([...suites, "multilang"].includes(suite), `Unknown browser suite: ${suite}`);
+  assert.ok([...suites, "multilang", "demo-backend"].includes(suite), `Unknown browser suite: ${suite}`);
   console.log(`\nRunning ${suite}`);
   const files = () => ['src/content', 'public'].flatMap(directory => readdirSync(join(root, directory), { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)));
   const originals = new Map(files().map(file => [file, readFileSync(file)]));
