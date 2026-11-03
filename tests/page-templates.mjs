@@ -21,8 +21,8 @@ try {
     assert.equal(first.title, "New example");
     assert.equal(first._type, type.name);
     assert.equal(first.category, undefined);
-    assert.equal(first.darkTheme, false);
-    assert.deepEqual(type.fields.find(field => field.key === "darkTheme"), { key: "darkTheme", label: "Dark theme", type: "boolean", initialValue: false });
+    assert.ok(!Object.hasOwn(first, "darkTheme"));
+    assert.ok(!type.fields.some(field => field.key === "darkTheme"));
     assert.deepEqual(first.sections.map(section => section._type), type.template.map(section => section.type));
     assert.ok(first.sections.every((section, index) => section._key !== second.sections[index]._key));
     validateDocument(manifest.schema, type.name, first.slug, first, manifest.documents);
@@ -34,7 +34,8 @@ try {
     const prefix = `${type.locale ? `/${type.locale}` : ""}${type.category ? `/${type.category.toLowerCase()}` : ""}`;
     const mapping = manifest.preview.documents[type.name];
     assert.equal(pageRoute({ slug: "stored-name", data: first }, mapping), `${prefix}/new-example/`);
-    for (const data of [first, { ...second, darkTheme: true }, { ...newDocumentFromTemplate(manifest.schema, type.name, "Draft example", "draft-example"), draft: true, darkTheme: true }]) {
+    for (const data of [first, second, { ...newDocumentFromTemplate(manifest.schema, type.name, "Draft example", "draft-example"), draft: true }]) {
+      assert.ok(!Object.hasOwn(data, "darkTheme"));
       const file = `${type.folder}/${data.slug}.json`;
       await writeFile(file, JSON.stringify(data), { flag: "wx" });
       created.push(file);
@@ -45,7 +46,9 @@ try {
     const route = pageRoute(sample, mapping);
     const html = await readFile(`dist${route}index.html`, "utf8");
     assert.ok(html.includes(`data-rigel-doc="${sample.id}"`));
-    assert.equal(html.includes('data-theme="dark"'), sample.data.darkTheme === true);
+    assert.ok(!Object.hasOwn(sample.data, "darkTheme"));
+    assert.doesNotMatch(html, /<html\b[^>]*data-theme=/);
+    assert.match(html, /<meta name="color-scheme" content="light"\s*\/?>/);
     assert.ok(html.includes(`<html lang="${type.locale ?? "en"}"`));
     const allowed = type.fields.find(field => field.key === "sections").items.map(item => item.name).sort();
     assert.deepEqual([...html.matchAll(/data-rigel-item-template="([^"]+)"/g)].map(match => match[1]).sort(), allowed);
@@ -56,10 +59,11 @@ try {
     if (data.draft) { await assert.rejects(readFile(`dist${path}index.html`), { code: "ENOENT" }); continue; }
     const html = await readFile(`dist${path}index.html`, "utf8");
     assert.ok(html.includes(`data-rigel-doc="${data._id}"`), "New pages render through the native host route");
-    assert.equal(html.includes('data-theme="dark"'), data.darkTheme === true);
+    assert.doesNotMatch(html, /<html\b[^>]*data-theme=/);
+    assert.match(html, /<meta name="color-scheme" content="light"\s*\/?>/);
     for (const section of data.sections) assert.ok(html.includes(`data-rigel-key="${section._key}"`));
   }
-  console.log(`PASS: ${types.length} native page types: Core/Legal metadata, per-page light/dark appearance, creation defaults, validation, unique section keys, public/editor route mappings, new-page rendering, production draft exclusion and built prepared sections`);
+  console.log(`PASS: ${types.length} native page types: Core/Legal metadata, light-only appearance, creation defaults, validation, unique section keys, public/editor route mappings, new-page rendering, production draft exclusion and built prepared sections`);
 } finally {
   await server.close();
   for (const file of created) await rm(file);

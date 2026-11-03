@@ -9,7 +9,7 @@
       "_type": "pageIntro",
       "eyebrow": "Perspective",
       "title": "A different perspective",
-      "body": "The same editing tools, in a dark page layout."
+      "body": "A page introduction followed by space for your story."
     },
     {
       "_key": "kexamplebody",
@@ -17,6 +17,5 @@
       "heading": "Your next idea",
       "body": "Replace this text with your story."
     }
-  ],
-  "darkTheme": true
+  ]
 }

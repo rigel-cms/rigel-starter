@@ -62,7 +62,6 @@ const schema = defineSchema({
       fields: [
         { ...titleField, label: "Page name" },
         { key: "draft", label: "Draft", type: "boolean" },
-        { key: "darkTheme", label: "Dark theme", type: "boolean", initialValue: false },
         { key: "metaTitle", label: "SEO title", type: "string" },
         { key: "description", label: "SEO description", type: "text" },
         {
