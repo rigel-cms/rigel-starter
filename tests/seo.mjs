@@ -24,18 +24,20 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
   const input = (selector, value) => evaluate(`(() => { const input = document.querySelector(${JSON.stringify(selector)}); input.value = ${JSON.stringify(value)}; input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const checkScroll = async () => {
     await evaluate("document.querySelector('.schema-panel').scrollIntoView({ block: 'start' }); document.querySelector('.schema-panel').scrollTop = 0");
-    const before = await evaluate("(() => { const panel = document.querySelector('.schema-panel'); return { tabs: panel.querySelector('.panel-tabs').getBoundingClientRect().top, field: panel.querySelector('.document-properties input, #properties-content input').getBoundingClientRect().top }; })()");
-    await evaluate("document.querySelector('.schema-panel').scrollTop = 160");
-    await waitFor("document.querySelector('.schema-panel').scrollTop >= 100");
-    const after = await evaluate("(() => { const panel = document.querySelector('.schema-panel'); return { tabs: panel.querySelector('.panel-tabs').getBoundingClientRect().top, field: panel.querySelector('.document-properties input, #properties-content input').getBoundingClientRect().top }; })()");
-    assert.ok(Math.abs(after.tabs - before.tabs) < 2, 'Only Content/SEO tabs stay pinned while scrolling');
-    assert.ok(after.field < before.field - 80, 'Page and article properties scroll away beneath the tabs');
+    const before = await evaluate("(() => { const panel = document.querySelector('.schema-panel'); return { tabs: panel.querySelector('.panel-tabs').getBoundingClientRect().top, field: panel.querySelector('[role=tabpanel]:not([hidden]) input, [role=tabpanel]:not([hidden]) textarea').getBoundingClientRect().top }; })()");
+    const distance = await evaluate("Math.min(160, document.querySelector('.schema-panel').scrollHeight - document.querySelector('.schema-panel').clientHeight)");
+    assert.ok(distance > 0, 'Short viewports exercise real properties scrolling');
+    await evaluate(`document.querySelector('.schema-panel').scrollTop = ${distance}`);
+    await waitFor(`document.querySelector('.schema-panel').scrollTop >= ${distance - 1}`);
+    const after = await evaluate("(() => { const panel = document.querySelector('.schema-panel'); return { tabs: panel.querySelector('.panel-tabs').getBoundingClientRect().top, field: panel.querySelector('[role=tabpanel]:not([hidden]) input, [role=tabpanel]:not([hidden]) textarea').getBoundingClientRect().top }; })()");
+    assert.ok(Math.abs(after.tabs - before.tabs) < 2, 'Only Page/Content/SEO tabs stay pinned while scrolling');
+    assert.ok(after.field <= before.field - distance + 2, 'Page and article properties scroll away beneath the tabs');
     assert.equal(await evaluate("(() => { const panel = document.querySelector('.schema-panel'), tabs = panel.querySelector('.panel-tabs'), background = getComputedStyle(panel).backgroundColor; return background !== 'rgba(0, 0, 0, 0)' && getComputedStyle(tabs).backgroundColor === background && getComputedStyle(tabs, '::before').backgroundColor === background; })()"), true, 'Tabs and the padding above them have an opaque panel background');
     assert.equal(await evaluate("(() => { const tabs = document.querySelector('.panel-tabs'), r = tabs.getBoundingClientRect(); return [r.top - 8, r.top + r.height / 2].every(y => document.elementFromPoint(r.left + r.width / 2, y)?.closest('.panel-tabs') === tabs); })()"), true, 'Scrolling fields cannot paint or receive clicks above the tabs');
     const width = await evaluate('innerWidth');
     await writeFile(`_temp/properties-scroll-${width}.png`, Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
     await evaluate("document.querySelector('.schema-panel').scrollTop = document.querySelector('.schema-panel').scrollHeight");
-    const bottom = await evaluate("(() => { const panel = document.querySelector('.schema-panel'), controls = [...panel.querySelectorAll('#properties-content input, #properties-content textarea, #properties-content [contenteditable]')].filter(el => el.getBoundingClientRect().height); const last = controls.at(-1).getBoundingClientRect(), tabs = panel.querySelector('.panel-tabs').getBoundingClientRect(); return { last: last.toJSON(), tabs: tabs.toJSON(), panel: panel.getBoundingClientRect().toJSON(), width: innerWidth }; })()");
+    const bottom = await evaluate("(() => { const panel = document.querySelector('.schema-panel'), controls = [...panel.querySelectorAll('[role=tabpanel]:not([hidden]) input, [role=tabpanel]:not([hidden]) textarea, [role=tabpanel]:not([hidden]) [contenteditable]')].filter(el => el.getBoundingClientRect().height); const last = controls.at(-1).getBoundingClientRect(), tabs = panel.querySelector('.panel-tabs').getBoundingClientRect(); return { last: last.toJSON(), tabs: tabs.toJSON(), panel: panel.getBoundingClientRect().toJSON(), width: innerWidth }; })()");
     assert.ok(bottom.last.bottom > bottom.tabs.bottom && bottom.last.bottom <= bottom.panel.bottom + 1, `Bottom properties remain reachable below the pinned tabs: ${JSON.stringify(bottom)}`);
     await evaluate("document.querySelector('.schema-panel').scrollTop = 0");
   };
@@ -54,18 +56,24 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
   try {
     for (const page of pages) {
       await open(page);
+      const mapping = manifest.preview.documents[page.type];
+      const slug = page.data.slug ?? page.slug;
+      const route = slug === 'home' && mapping.index ? mapping.index : mapping.url.replaceAll('{slug}', slug);
+      assert.deepEqual(await evaluate("(() => { const input = document.querySelector('.page-path input'); return { value: input.value, readonly: input.readOnly, tab: input.closest('[role=tabpanel]').id }; })()"), { value: route, readonly: true, tab: 'properties-page' });
       assert.equal(await evaluate("!!document.querySelector('[aria-label=\"Edit name\"]')"), false);
-      assert.deepEqual(await evaluate("[...document.querySelectorAll('#properties-content > section > h3')].map(heading => heading.textContent)"), ['Page properties', 'Structure']);
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('#properties-content > section > h3')].map(heading => heading.textContent)"), ['Structure']);
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('#properties-page > section > h3')].map(heading => heading.textContent)"), ['Page properties']);
+      assert.equal(await evaluate("document.querySelector('#properties-page').hidden"), true, 'Content stays the default editing tab');
       await evaluate("window.pageNameControl = document.querySelector('.document-properties [data-schema-path=title] input'); window.draftControl = document.querySelector('.document-properties [data-schema-path=draft] input[role=switch]')");
       assert.equal(await evaluate("!!window.pageNameControl && !!window.draftControl"), true);
-      assert.deepEqual(await evaluate("[...document.querySelectorAll('.panel-tabs [role=tab]')].map(tab => tab.textContent)"), ['Content', 'SEO']);
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('.panel-tabs [role=tab]')].map(tab => tab.textContent)"), ['Page', 'Content', 'SEO']);
       await click('#properties-tab-seo');
       assert.equal(await evaluate("!!document.querySelector('#properties-seo [data-schema-path=ogImage] .image-field')"), true, 'Every website page has a social image picker in SEO');
       assert.equal(await evaluate("!document.querySelector('#properties-seo').hidden && document.querySelector('#properties-content').hidden && !!document.querySelector('[data-schema-path=metaTitle] input') && !!document.querySelector('[data-schema-path=description] textarea')"), true);
       await evaluate("document.querySelector('.visual-editor iframe').contentDocument.querySelector('h1').click()");
       await waitFor("document.querySelector('#properties-tab-content').getAttribute('aria-selected') === 'true' && !!document.activeElement?.closest('.section-properties')");
       assert.equal(await evaluate("window.pageNameControl === document.querySelector('.document-properties [data-schema-path=title] input') && window.draftControl === document.querySelector('.document-properties [data-schema-path=draft] input[role=switch]')"), true, 'Page properties remain mounted when selecting sections');
-      assert.deepEqual(await evaluate("[...document.querySelectorAll('#properties-content > section > h3')].map(heading => heading.textContent)"), ['Page properties', 'Structure', 'Section properties']);
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('#properties-content > section > h3')].map(heading => heading.textContent)"), ['Structure', 'Section properties']);
       await evaluate("document.querySelector('.structure-row').click()");
       assert.equal(await evaluate("window.pageNameControl === document.querySelector('.document-properties [data-schema-path=title] input')"), true);
       if (page.slug === 'home') {
@@ -80,8 +88,9 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
     for (const item of fixtures) {
       await open(item);
       if (item.collection) {
+        await click('#properties-tab-page');
         for (const width of [1280, 390]) {
-          await cdp('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: false });
+          await cdp('Emulation.setDeviceMetricsOverride', { width, height: 600, deviceScaleFactor: 1, mobile: false });
           await checkScroll();
         }
         await cdp('Emulation.clearDeviceMetricsOverride');
@@ -91,15 +100,29 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
       const originalSeo = await evaluate("document.querySelector('.seo-fields input').value");
       const name = `Renamed ${item.collection ?? 'page'} ${item.slug}`;
       const attr = item.collection ? 'data-collection-field' : 'data-schema-path';
+      await click('#properties-tab-page');
+      assert.equal(await evaluate("!!document.querySelector('#properties-page input') && document.querySelector('#properties-content').hidden && document.querySelector('#properties-seo').hidden"), true);
+      assert.equal(await evaluate("document.querySelector('.page-path input').value"), item.route);
+      assert.equal(await evaluate("!!document.querySelector('.titlebar [aria-label=\"Delete post\"]')"), false);
+      if (item.collection) assert.equal(await evaluate("!!document.querySelector('#properties-page [aria-label=\"Delete post\"]')"), true);
+      const slugSelector = '#properties-page input:not([readonly])';
+      const originalSlug = await evaluate(`document.querySelector(${JSON.stringify(slugSelector)}).value`);
+      await input(slugSelector, 'Route check');
+      const mapping = item.collection ? manifest.preview.collections[item.collection] : manifest.preview.documents[pages.find(page => page.slug === item.slug).type];
+      assert.equal(await evaluate("document.querySelector('.page-path input').value"), mapping.url.replaceAll('{slug}', 'route-check'), 'Resolved path updates from unsaved slug changes');
+      assert.equal(await readFile(item.file, 'utf8'), originals[fixtures.indexOf(item)], 'Viewing and changing the route does not autosave');
+      await input(slugSelector, originalSlug);
       await input(`[${attr}=title] input`, name);
       if (!item.collection) await click('[data-schema-path=draft] input[role=switch]');
       assert.equal(await evaluate("document.querySelector('.titlebar h2').textContent"), name);
       assert.equal(await evaluate("document.querySelector('.seo-fields input').value"), originalSeo, 'Renaming content does not overwrite SEO title');
       assert.equal(await readFile(item.file, 'utf8'), originals[fixtures.indexOf(item)], 'Page properties do not autosave or change the URL');
       await evaluate("document.querySelector('#properties-tab-content').focus()");
-      await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'End', code: 'End', windowsVirtualKeyCode: 35 });
-      await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'End', code: 'End', windowsVirtualKeyCode: 35 });
-      await waitFor("document.activeElement?.id === 'properties-tab-seo' && !document.querySelector('#properties-seo').hidden");
+      for (const [key, code, target] of [['Home', 36, 'page'], ['ArrowLeft', 37, 'seo'], ['ArrowRight', 39, 'page'], ['ArrowRight', 39, 'content'], ['End', 35, 'seo']]) {
+        await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key, windowsVirtualKeyCode: code });
+        await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key, windowsVirtualKeyCode: code });
+        await waitFor(`document.activeElement?.id === 'properties-tab-${target}' && !document.querySelector('#properties-${target}').hidden`);
+      }
       const title = `SEO title ${item.collection ?? 'page'} ${item.slug}`;
       const description = `Saved SEO description for ${item.route}`;
       for (const [key, cases] of [
@@ -157,7 +180,7 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
       assert.equal((item.collection ? cleared.frontmatter : cleared).ogImage, '');
       await waitFor(`fetch(${JSON.stringify(item.route)}).then(response => response.text()).then(html => { const head=new DOMParser().parseFromString(html,'text/html'); return !head.querySelector('meta[property="og:image"], meta[name="twitter:image"]'); })`);
     }
-    console.log('PASS: Content/SEO tabs on all website pages and articles, keyboard navigation, canvas selection returns to Content, independent SEO values, explicit Save/file/public head/reload and exact fixture restoration');
+    console.log('PASS: Page/Content/SEO tabs on all website pages and articles, keyboard navigation, canvas selection returns to Content, independent SEO values, explicit Save/file/public head/reload and exact fixture restoration');
   } finally {
     await cdp('Emulation.clearDeviceMetricsOverride');
     await evaluate('scrollTo(0, 0)');

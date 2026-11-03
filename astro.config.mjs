@@ -51,13 +51,13 @@ export default defineConfig({
       ],
       preview: {
         documents: {
-          page: { url: "/{slug}/", index: "/" },
-          legalPage: { url: "/legal/{slug}/" },
+          page: { url: "/{slug}/", index: "/", template: "/preview/documents/page/" },
+          legalPage: { url: "/legal/{slug}/", template: "/preview/documents/legalPage/" },
           ...(multilingual ? {
-            pageEn: { url: "/en/{slug}/" },
-            pageFr: { url: "/fr/{slug}/" },
-            legalPageEn: { url: "/en/legal/{slug}/" },
-            legalPageFr: { url: "/fr/legal/{slug}/" },
+            pageEn: { url: "/en/{slug}/", template: "/preview/documents/pageEn/" },
+            pageFr: { url: "/fr/{slug}/", template: "/preview/documents/pageFr/" },
+            legalPageEn: { url: "/en/legal/{slug}/", template: "/preview/documents/legalPageEn/" },
+            legalPageFr: { url: "/fr/legal/{slug}/", template: "/preview/documents/legalPageFr/" },
           } : {}),
         },
         collections: {

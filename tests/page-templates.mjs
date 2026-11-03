@@ -33,6 +33,12 @@ try {
     }
     const prefix = `${type.locale ? `/${type.locale}` : ""}${type.category ? `/${type.category.toLowerCase()}` : ""}`;
     const mapping = manifest.preview.documents[type.name];
+    assert.equal(mapping.template, `/preview/documents/${type.name}/`);
+    const templateHtml = await readFile(`dist${mapping.template}index.html`, "utf8");
+    assert.ok(templateHtml.includes('data-rigel-each="sections" data-rigel-doc="$document"'));
+    const allowedSections = type.fields.find(field => field.key === "sections").items.map(item => item.name).sort();
+    assert.deepEqual([...templateHtml.matchAll(/data-rigel-item-template="([^"]+)"/g)].map(match => match[1]).sort(), allowedSections);
+    assert.ok(templateHtml.includes(`<html lang="${type.locale ?? "en"}"`));
     assert.equal(pageRoute({ slug: "stored-name", data: first }, mapping), `${prefix}/new-example/`);
     for (const data of [first, second, { ...newDocumentFromTemplate(manifest.schema, type.name, "Draft example", "draft-example"), draft: true }]) {
       assert.ok(!Object.hasOwn(data, "darkTheme"));

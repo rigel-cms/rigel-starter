@@ -59,6 +59,7 @@ const schema = defineSchema({
       title: "Pages",
       type: "document",
       folder: "src/content/pages",
+      protectedSlugs: ["home", "about", "services", "blog", "news", "contact", "getting-started", "perspective"],
       fields: [
         { ...titleField, label: "Page name" },
         { key: "draft", label: "Draft", type: "boolean" },
@@ -311,6 +312,7 @@ if (multilingual) {
       title: locale === "en" ? "English pages" : "Pages françaises",
       locale,
       folder: `src/content/multilang/${locale}/pages`,
+      protectedSlugs: locale === "en" ? ["welcome"] : ["welcome", "unpublished"],
       fields: page.fields.map(field => field.key === "sections" ? {
         ...field,
         items: sections.map(name => ({ type: "object" as const, name })),
@@ -329,6 +331,7 @@ for (const locale of [undefined, ...(multilingual ? ["en", "fr"] : [])]) {
     name: `legalPage${locale ? locale === "fr" ? "Fr" : "En" : ""}`,
     title: `Legal pages${locale ? ` (${locale})` : ""}`,
     category: "Legal",
+    protectedSlugs: ["example"],
     ...(locale ? { locale } : {}),
     folder: locale ? `src/content/multilang/${locale}/legal` : "src/content/legal",
     fields: page.fields.map(field => field.key === "sections" ? {

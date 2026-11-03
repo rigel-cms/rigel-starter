@@ -124,7 +124,8 @@ export async function checkPages({ cdp, evaluate, waitFor }) {
     assert.equal(await evaluate("document.querySelectorAll('th').length"), await evaluate("document.querySelectorAll('.table-sort').length"));
     assert.equal(await evaluate("document.querySelectorAll('tbody tr').length"), manifest.collections[0].posts.length);
     await evaluate("document.querySelector('tbody tr').click()");
-    await waitFor("!!document.querySelector('.titlebar .icon-btn')");
+    await waitFor("!!document.querySelector('.canvas-stage')");
+    assert.equal(await evaluate("!!document.querySelector('.titlebar [aria-label=\"Delete post\"]')"), false);
     const post = manifest.collections[0].posts[0];
     assert.equal(await evaluate("document.querySelector('.titlebar h2').textContent"), post.frontmatter.title || post.slug);
     assert.equal(await evaluate("!!document.querySelector('.editor-actions .save-status')"), true);

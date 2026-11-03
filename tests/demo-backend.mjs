@@ -89,7 +89,9 @@ try {
   await evaluate("document.querySelector('[data-collection=blog]').click()");
   await waitFor("[...document.querySelectorAll('.table-link')].some(button => button.textContent.includes('Demo browser post'))");
   await evaluate("[...document.querySelectorAll('.table-link')].find(button => button.textContent.includes('Demo browser post')).click()");
-  await waitFor("!!document.querySelector('button[aria-label=\"Delete post\"]')");
+  await openProperties({ evaluate, waitFor });
+  await evaluate("document.querySelector('#properties-tab-page').click()");
+  await waitFor("!!document.querySelector('#properties-page button[aria-label=\"Delete post\"]')");
   await evaluate("document.querySelector('button[aria-label=\"Delete post\"]').click()");
   await waitFor("!!document.querySelector('.action-dialog[open]')");
   await evaluate("document.querySelector('.action-dialog [type=submit]').click()");

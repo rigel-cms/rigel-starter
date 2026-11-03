@@ -139,8 +139,10 @@ export async function checkUnsaved({ cdp, evaluate, waitFor }) {
       await click(`[data-collection="${collection}"]`);
       await waitFor("!!document.querySelector('.table-link')");
       await evaluate("[...document.querySelectorAll('.table-link')].find(b => b.textContent === 'Unsaved creation').click()");
-      await waitFor("!!document.querySelector('[aria-label=\"Delete post\"]')");
+      await waitFor("!!document.querySelector('.canvas-stage')");
       await openProperties({ evaluate, waitFor });
+      await click('#properties-tab-page');
+      await waitFor("!!document.querySelector('#properties-page [aria-label=\"Delete post\"]')");
       const before = await count();
       await click('[aria-label="Delete post"]');
       await waitFor("!!document.querySelector('.action-dialog[open]')");

@@ -72,7 +72,7 @@ try {
   await cdp("Runtime.enable");
   await cdp("Page.enable");
   await cdp("Page.addScriptToEvaluateOnNewDocument", { source: `
-    if (!localStorage.getItem('rigelcms.settings')) localStorage.setItem('rigelcms.settings', JSON.stringify({ userPref: { editorExperience: 'sidebar' } }));
+    if (window === window.top && !localStorage.getItem('rigelcms.settings')) localStorage.setItem('rigelcms.settings', JSON.stringify({ userPref: { editorExperience: 'sidebar' } }));
     window.alert = window.confirm = window.prompt = () => { throw new Error('Native JS dialogs must not be used'); };
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
@@ -308,11 +308,14 @@ try {
   await (await import("./unsaved.mjs")).checkUnsaved({ cdp, evaluate, waitFor });
   await (await import("./menus.mjs")).checkMenus({ cdp, evaluate, waitFor });
   await (await import("./pages.mjs")).checkPages({ cdp, evaluate, waitFor });
+  await (await import("./page-previews.mjs")).checkPagePreviews({ evaluate, waitFor });
+  await (await import("./page-deletion.mjs")).checkPageDeletion({ cdp, evaluate, waitFor });
   await (await import("./search-palette.mjs")).checkSearchPalette({ cdp, evaluate, waitFor });
   await evaluate("document.querySelector('#nav-pages').click()");
   await waitFor("!![...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === 'contact')");
   await evaluate("[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === 'contact').querySelector('.table-link').click()");
   await openProperties({ evaluate, waitFor });
+  await evaluate("document.querySelector('#properties-tab-page').click()");
   await waitFor("!!document.querySelector('main input[type=text]')");
   await waitFor("document.querySelector('.brand img')?.complete && document.querySelector('.brand img').naturalWidth > 0");
   assert.equal(await evaluate("document.querySelector('.brand span').textContent"), "Rigel CMS");
@@ -370,6 +373,7 @@ try {
     await waitFor("!!document.querySelector('.table-link')");
     await evaluate("[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === 'contact').querySelector('.table-link').click()");
     await openProperties({ evaluate, waitFor });
+    await evaluate("document.querySelector('#properties-tab-page').click()");
     await waitFor("!!document.querySelector('main input[type=text]')");
   };
   await checkColors("light");
@@ -571,6 +575,7 @@ try {
   await waitFor("!!document.querySelector('.table-link')");
   await evaluate("document.querySelector('.table-link').click()");
   await openProperties({ evaluate, waitFor });
+  await evaluate("document.querySelector('#properties-tab-page').click()");
   await waitFor("!!document.querySelector('main input[type=text]')");
   await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
   await evaluate(`(() => {
@@ -593,6 +598,7 @@ try {
   await waitFor("!!document.querySelector('.table-link')");
   await evaluate("document.querySelector('.table-link').click()");
   await openProperties({ evaluate, waitFor });
+  await evaluate("document.querySelector('#properties-tab-page').click()");
   await waitFor("!!document.querySelector('main input[type=text]')");
   assert.equal(await evaluate("document.querySelector('main input[type=text]').value.includes('unsaved test draft')"), false);
   assert.deepEqual(errors, []);

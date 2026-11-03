@@ -27,6 +27,7 @@ export async function checkSelects({ cdp, evaluate, waitFor }) {
     await evaluate("document.querySelector('tbody .table-link').click()");
     await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
     await openProperties({ evaluate, waitFor });
+    await evaluate("document.querySelector('#properties-tab-page').click()");
   };
   const author = '[data-collection-field=author] button[role=combobox]';
   const clickPreview = async () => {
@@ -115,6 +116,7 @@ export async function checkSelects({ cdp, evaluate, waitFor }) {
   await waitFor("!!document.querySelector('.select-menu:popover-open')");
   await key('Escape');
   await article('blog');
+  await evaluate("document.querySelector('#properties-tab-content').click()");
   await click('[data-collection-field="$body"] button[aria-label="Block type"]');
   await waitFor("!!document.querySelector('.select-menu:popover-open')");
   const heading = await evaluate("[...document.querySelectorAll('.select-menu:popover-open .select-option')].find(option => option.querySelector('span').textContent === 'Heading 2').id");

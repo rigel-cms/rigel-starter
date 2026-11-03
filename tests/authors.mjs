@@ -15,6 +15,7 @@ export async function checkAuthors({ cdp, evaluate, waitFor }) {
     await evaluate(`[...document.querySelectorAll('tbody tr')].find(row => row.cells[1].textContent.trim() === ${JSON.stringify(slug)}).querySelector('.table-link').click()`);
     await waitFor("document.querySelector('.canvas-stage')?.dataset.ready === 'true'");
     await openProperties({ evaluate, waitFor });
+    await click('#properties-tab-page');
   };
   const choose = async ids => {
     await evaluate(`(() => { const el = document.querySelector('[data-collection-field="author"] select'); for (const option of el.options) option.selected = ${JSON.stringify(ids)}.includes(option.value); el.dispatchEvent(new Event('change', { bubbles: true })); })()`);
@@ -80,6 +81,7 @@ export async function checkAuthors({ cdp, evaluate, waitFor }) {
     await evaluate(`${newRow}.querySelector('.table-link').click()`);
     await waitFor("!!document.querySelector('[data-schema-path=name] input')");
     await evaluate("document.querySelector('[data-schema-path=name] input').focus()");
+    await waitFor("document.activeElement === document.querySelector('[data-schema-path=name] input') && getComputedStyle(document.activeElement).outlineOffset === '3px'");
     assert.deepEqual(await evaluate("(() => { const panel = getComputedStyle(document.querySelector('.document-form .schema-panel')), section = getComputedStyle(document.querySelector('.document-form section')), focus = getComputedStyle(document.activeElement); return { x: panel.overflowX, y: panel.overflowY, background: panel.backgroundColor, section: section.backgroundColor, shadow: section.boxShadow, outline: focus.outlineWidth, offset: focus.outlineOffset, canvas: !!document.querySelector('.content.visual') }; })()"), { x: 'visible', y: 'visible', background: 'rgba(0, 0, 0, 0)', section: 'rgba(0, 0, 0, 0)', shadow: 'none', outline: '3px', offset: '3px', canvas: false });
     await writeFile('_temp/author-record.png', Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
     await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 400, deviceScaleFactor: 1, mobile: false });

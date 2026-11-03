@@ -25,6 +25,7 @@ export async function checkCollectionVisual({ cdp, evaluate, waitFor }) {
     for (const item of fixtures) {
       await open(item);
       await (await import('./properties-resize.mjs')).checkPropertiesResize({ cdp, evaluate, waitFor });
+      await click('#properties-tab-page');
       const originalDate = JSON.parse(originals[fixtures.indexOf(item)]).frontmatter.date;
       const readableDate = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${originalDate}T12:00:00Z`));
       assert.equal(await evaluate("document.querySelector('[data-collection-field=date] .date-trigger')?.textContent.trim()"), readableDate, 'Article dates display English long dates');
