@@ -52,16 +52,6 @@
       "callout": {
         "_ref": "callout:studio"
       }
-    },
-    {
-      "_key": "kc466541781f0",
-      "title": "Your headline starts here",
-      "body": "Introduce your work and what makes it different. Edit this text to make it yours.",
-      "image": "/demo/hero.jpg",
-      "alt": "Looking up between glass office towers toward an overcast sky",
-      "label": "Explore services",
-      "href": "/services/",
-      "_type": "hero"
     }
   ]
 }
