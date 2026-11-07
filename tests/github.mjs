@@ -2,6 +2,7 @@ import "./local-only.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 
@@ -16,12 +17,15 @@ const settingsDoc = structuredClone(blueprint.documents.find(doc => doc.id === "
 settingsDoc.data.siteName = "Remote draft fixture";
 const filePath = `${settingsType.folder}/site.json`;
 let stored = JSON.stringify(settingsDoc.data, null, 2) + "\n";
-let sha = "a".repeat(40);
+const blobSha = text => createHash("sha1").update(`blob ${Buffer.byteLength(text)}\0${text}`).digest("hex");
+let sha = blobSha(stored);
 let head = "b".repeat(40);
 let sequence = 0;
 const nextSha = () => (++sequence).toString(16).padStart(40, "0");
 const blobs = new Map([[sha, stored]]);
 const trees = new Map([["c".repeat(40), sha]]);
+const ledgers = new Map();
+const ledgerPath = `${settingsType.folder}/.rigel-collection.json`;
 const commits = new Map([[head, { tree: "c".repeat(40), parents: [] }]]);
 let installed = false;
 let writable = true;
@@ -67,7 +71,8 @@ function api(path, method, body) {
   if (method === "GET" && path.startsWith(`${prefix}/git/trees/`)) {
     const key = path.slice(`${prefix}/git/trees/`.length).split('?')[0];
     assert.ok(trees.has(commits.get(key)?.tree ?? key), 'Requested tree exists');
-    return [200, { truncated: false, tree: [{ path: filePath, type: "blob", mode: "100644", sha: trees.get(commits.get(key)?.tree ?? key) }] }];
+    const tree = commits.get(key)?.tree ?? key;
+    return [200, { truncated: false, tree: [{ path: filePath, type: "blob", mode: "100644", sha: trees.get(tree) }, ...(ledgers.has(tree) ? [{ path: ledgerPath, type: "blob", mode: "100644", sha: ledgers.get(tree) }] : [])] }];
   }
   if (method === "GET" && path.startsWith(`${prefix}/git/commits/`)) {
     const commit = commits.get(path.slice(`${prefix}/git/commits/`.length));
@@ -81,18 +86,21 @@ function api(path, method, body) {
   }
   if (method === "POST" && path === `${prefix}/git/blobs`) {
     assert.equal(body.encoding, "base64");
-    const blob = nextSha();
-    blobs.set(blob, Buffer.from(body.content, "base64").toString("utf8"));
+    const text = Buffer.from(body.content, "base64").toString("utf8"), blob = blobSha(text);
+    blobs.set(blob, text);
     return [201, { sha: blob }];
   }
   if (method === "POST" && path === `${prefix}/git/trees`) {
     assert.equal(body.base_tree, commits.get(head).tree, 'Save uses the loaded draft tree');
     assert.equal(trees.get(body.base_tree), sha, 'Save uses the loaded blob, not a newer SHA');
-    assert.equal(body.tree.length, 1);
+    assert.equal(body.tree.length, 2, 'Save atomically updates document and metadata ledger');
     assert.deepEqual(body.tree[0], { path: filePath, mode: "100644", type: "blob", sha: body.tree[0].sha });
+    assert.deepEqual(body.tree[1], { path: ledgerPath, mode: "100644", type: "blob", sha: body.tree[1].sha });
     assert.ok(blobs.has(body.tree[0].sha));
+    assert.ok(blobs.has(body.tree[1].sha));
     const tree = nextSha();
     trees.set(tree, body.tree[0].sha);
+    ledgers.set(tree, body.tree[1].sha);
     return [201, { sha: tree }];
   }
   if (method === "POST" && path === `${prefix}/git/commits`) {
