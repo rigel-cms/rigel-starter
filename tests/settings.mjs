@@ -151,7 +151,13 @@ try {
   await cdp("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "light" }] });
   await cdp("Page.navigate", { url: process.env.RIGEL_URL || "http://localhost:4321/rigel/" });
   await waitFor("!!document.querySelector('.user-btn')");
-  if (process.env.RIGEL_BROWSER_MULTILANG_ONLY === "true") {
+  if (process.env.RIGEL_BROWSER_NAVIGATION_ONLY === "true") {
+    await (await import("./hash-navigation.mjs")).checkHashNavigation({ cdp, evaluate, waitFor });
+    assert.deepEqual(errors, []);
+  } else if (process.env.RIGEL_BROWSER_SEO_ONLY === "true") {
+    await (await import("./seo.mjs")).checkSeo({ cdp, evaluate, waitFor });
+    assert.deepEqual(errors, []);
+  } else if (process.env.RIGEL_BROWSER_MULTILANG_ONLY === "true") {
     await (await import("./multilang.mjs")).checkMultilang({ cdp, evaluate, waitFor });
     assert.deepEqual(errors, []);
   } else {

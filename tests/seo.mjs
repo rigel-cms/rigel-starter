@@ -69,6 +69,7 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
       assert.deepEqual(await evaluate("[...document.querySelectorAll('.panel-tabs [role=tab]')].map(tab => tab.textContent)"), ['Page', 'Content', 'SEO']);
       await click('#properties-tab-seo');
       assert.equal(await evaluate("!!document.querySelector('#properties-seo [data-schema-path=ogImage] .image-field')"), true, 'Every website page has a social image picker in SEO');
+      assert.equal(await evaluate("!!document.querySelector('#properties-seo [data-schema-path=noindex] input[role=switch]')"), true, 'Every website page has its built-in indexing switch in SEO');
       assert.equal(await evaluate("!document.querySelector('#properties-seo').hidden && document.querySelector('#properties-content').hidden && !!document.querySelector('[data-schema-path=metaTitle] input') && !!document.querySelector('[data-schema-path=description] textarea')"), true);
       await evaluate("document.querySelector('.visual-editor iframe').contentDocument.querySelector('h1').click()");
       await waitFor("document.querySelector('#properties-tab-content').getAttribute('aria-selected') === 'true' && !!document.activeElement?.closest('.section-properties')");
@@ -124,6 +125,15 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
         await waitFor(`document.activeElement?.id === 'properties-tab-${target}' && !document.querySelector('#properties-${target}').hidden`);
       }
       const title = `SEO title ${item.collection ?? 'page'} ${item.slug}`;
+      const noindex = `#properties-seo [${attr}=noindex] input[role=switch]`;
+      assert.equal(await evaluate(`document.querySelector(${JSON.stringify(noindex)}).checked`), false, 'Missing noindex defaults to indexable');
+      assert.equal(await evaluate(`document.querySelector(${JSON.stringify(noindex)}).closest('label').textContent.trim()`), 'No index (noindex)');
+      assert.equal(await evaluate("document.querySelector('#properties-seo [data-seo-noindex]').textContent.trim()"), 'Instruct search engines not to index this page or show it in search results. Robots can still crawl the page and follow its links. This does not make the page private.');
+      const previewRobots = await evaluate(`${frame}.contentDocument.querySelector('meta[name=robots]')?.content ?? null`);
+      await click(noindex);
+      assert.equal(await evaluate(`document.querySelector(${JSON.stringify(noindex)}).checked`), true);
+      assert.equal(await evaluate(`${frame}.contentDocument.querySelector('meta[name=robots]')?.content ?? null`), previewRobots, 'Unsaved indexing does not replace preview metadata');
+      assert.equal(await evaluate(`fetch(${JSON.stringify(item.route)}).then(response => response.text()).then(html => new DOMParser().parseFromString(html, 'text/html').querySelector('meta[name=robots]')?.content ?? null)`), null, 'Unsaved indexing leaves the public head unchanged');
       const description = `Saved SEO description for ${item.route}`;
       for (const [key, cases] of [
         ['metaTitle', [['', 'empty'], ['Tiny', 'danger'], ['T'.repeat(40), 'warning'], ['T'.repeat(50), 'success'], ['T'.repeat(60), 'success'], ['T'.repeat(61), 'danger'], ['🌟', 'danger']]],
@@ -156,6 +166,7 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
       assert(saved.includes(title) && saved.includes(description), 'Explicit Save persists text metadata');
       const savedData = JSON.parse(saved);
       assert.equal((item.collection ? savedData.frontmatter : savedData).ogImage, image, 'Explicit Save persists the social image');
+      assert.equal((item.collection ? savedData.frontmatter : savedData).noindex, true, 'Explicit Save persists noindex in the existing content record');
       assert(saved.includes(name), 'Explicit Save persists the independently edited CMS name');
       if (!item.collection) assert.equal(JSON.parse(saved).draft, true);
       for (let attempt = 0; attempt < 100; attempt++) {
@@ -167,10 +178,13 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
       await cdp('Page.reload');
       await waitFor("!!document.querySelector('[data-doctype=author]')");
       await open({ ...item, drafted: !item.collection });
+      await waitFor(`fetch(${JSON.stringify(item.route)}).then(response => response.text()).then(html => { const tags=new DOMParser().parseFromString(html,'text/html').querySelectorAll('meta[name=robots]'); return tags.length === 1 && tags[0].content === 'noindex'; })`);
       if (!item.collection) assert.equal(await evaluate("document.querySelector('[data-schema-path=draft] input[role=switch]').checked"), true, 'Draft state survives Save and reload');
       await click('#properties-tab-seo');
       assert.equal(await evaluate(`document.querySelector('[${attr}=metaTitle] input').value`), title);
       assert.equal(await evaluate(`document.querySelector('[${attr}=description] textarea').value`), description);
+      assert.equal(await evaluate(`document.querySelector(${JSON.stringify(noindex)}).checked`), true, 'Indexing switch survives Save and reload');
+      await click(noindex);
       assert.equal(await evaluate(`document.querySelector('[${attr}=ogImage] .image-field img').getAttribute('src')`), image, 'Social image survives reload');
       await click(`[${attr}=ogImage] [aria-label="Remove image"]`);
       assert.equal(await readFile(item.file, 'utf8'), saved, 'Removing a social image does not autosave');
@@ -178,9 +192,11 @@ export async function checkSeo({ cdp, evaluate, waitFor }) {
       await waitFor("document.querySelector('.save-status')?.textContent.trim() === 'Saved'");
       const cleared = JSON.parse(await readFile(item.file, 'utf8'));
       assert.equal((item.collection ? cleared.frontmatter : cleared).ogImage, '');
+      assert.equal((item.collection ? cleared.frontmatter : cleared).noindex, false, 'Indexing can be re-enabled with explicit Save');
+      await waitFor(`fetch(${JSON.stringify(item.route)}).then(response => response.text()).then(html => !new DOMParser().parseFromString(html,'text/html').querySelector('meta[name=robots]'))`);
       await waitFor(`fetch(${JSON.stringify(item.route)}).then(response => response.text()).then(html => { const head=new DOMParser().parseFromString(html,'text/html'); return !head.querySelector('meta[property="og:image"], meta[name="twitter:image"]'); })`);
     }
-    console.log('PASS: Page/Content/SEO tabs on all website pages and articles, keyboard navigation, canvas selection returns to Content, independent SEO values, explicit Save/file/public head/reload and exact fixture restoration');
+    console.log('PASS: Page/Content/SEO tabs on all website pages and articles, built-in noindex switch defaults/unsaved isolation/Save/reload/re-enable, unique public robots tag, keyboard navigation, independent SEO values and exact fixture restoration');
   } finally {
     await cdp('Emulation.clearDeviceMetricsOverride');
     await evaluate('scrollTo(0, 0)');
