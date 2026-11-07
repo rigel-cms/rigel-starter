@@ -32,6 +32,12 @@ let fixtureUser = "fixture-user";
 let readbackFailures = 0;
 const requests = [];
 const errors = [];
+let releaseManifest;
+let manifestPending = new Promise(resolve => { releaseManifest = resolve; });
+let manifestFailure = true;
+let releaseUser;
+let userPending = new Promise(resolve => { releaseUser = resolve; });
+let userFailure = false;
 const gateway = createServer((request, response) => {
   const target = new URL(request.url, "http://localhost");
   if (target.pathname !== "/authorize") { response.writeHead(404).end(); return; }
@@ -154,9 +160,11 @@ try {
       const { requestId, request } = event.params;
       const target = new URL(request.url);
       if (target.pathname === "/rigel/manifest.json") {
-        await cdp("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(manifest)).toString("base64") });
+        await manifestPending;
+        await cdp("Fetch.fulfillRequest", { requestId, responseCode: manifestFailure ? 503 : 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify(manifest)).toString("base64") });
       } else if (target.hostname === "api.github.com") {
-        const [status, result] = api(target.pathname + target.search, request.method, request.postData ? JSON.parse(request.postData) : undefined);
+        if (target.pathname === "/user") await userPending;
+        const [status, result] = target.pathname === "/user" && userFailure ? [503, { message: "Fixture access outage" }] : api(target.pathname + target.search, request.method, request.postData ? JSON.parse(request.postData) : undefined);
         await cdp("Fetch.fulfillRequest", { requestId, responseCode: status, responseHeaders: [
           { name: "Content-Type", value: "application/json" }, { name: "Access-Control-Allow-Origin", value: "*" },
           { name: "Access-Control-Allow-Headers", value: "Authorization,Content-Type,Accept,X-GitHub-Api-Version" }, { name: "Access-Control-Allow-Methods", value: "GET,POST,PUT,PATCH,DELETE,OPTIONS" },
@@ -182,12 +190,59 @@ try {
   };
   const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
   await cdp("Page.navigate", { url });
-  await waitFor("!!document.querySelector('#github-connection')");
+  await waitFor("!!document.querySelector('.connection-loader')");
+  assert.equal(await evaluate("document.querySelector('#github-connection').getAttribute('aria-busy')"), "true");
+  assert.equal(await evaluate("document.querySelector('.connection-loader').hasAttribute('aria-valuenow')"), false);
+  const firstPosition = await evaluate("getComputedStyle(document.querySelector('.connection-loader'), '::before').left");
+  await new Promise(resolve => setTimeout(resolve, 250));
+  assert.notEqual(await evaluate("getComputedStyle(document.querySelector('.connection-loader'), '::before').left"), firstPosition, "Pending configuration really animates");
+  for (const theme of ["light", "dark"]) {
+    await cdp("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: theme }] });
+    await waitFor(`document.documentElement.dataset.theme === ${JSON.stringify(theme)}`);
+    for (const width of [1280, 390, 320]) {
+      await cdp("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: false });
+      assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true, `${theme} ${width}: pending line does not overflow`);
+      assert.equal(await evaluate("getComputedStyle(document.querySelector('.connection-loader'), '::before').backgroundColor"), theme === "light" ? "rgb(0, 90, 163)" : "rgb(114, 216, 255)");
+      await writeFile(`_temp/github-loading-${theme}-${width}.png`, Buffer.from((await cdp("Page.captureScreenshot", { format: "png" })).data, "base64"));
+    }
+  }
+  await cdp("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.connection-loader'), '::before').animationName"), "none");
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.connection-loader'), '::before').left"), "60px");
+  await writeFile("_temp/github-loading-reduced-motion.png", Buffer.from((await cdp("Page.captureScreenshot", { format: "png" })).data, "base64"));
+  await cdp("Emulation.setEmulatedMedia", { features: [] });
+  await cdp("Emulation.clearDeviceMetricsOverride");
+  releaseManifest();
+  await waitFor("!!document.querySelector('#github-connection [role=alert]')");
+  assert.equal(await evaluate("!!document.querySelector('.connection-loader')"), false, "Configuration failure stops the line");
+  assert.equal(await evaluate("document.querySelector('#github-connection').getAttribute('aria-busy')"), "false");
+  manifestFailure = false;
+  await click("#github-connection button");
+  await waitFor("!!document.querySelector('#github-sign-in')");
+  assert.equal(await evaluate("!!document.querySelector('.connection-loader')"), false, "Idle login has no animation");
   assert.equal(await evaluate("!!document.querySelector('#rigel-sidebar')"), false, "Identity-only login must not expose editors");
   assert.equal(requests.length, 0);
   await click("#github-sign-in");
+  await waitFor("!!document.querySelector('.connection-loader') && document.querySelector('#github-sign-in').disabled");
+  assert.equal(await evaluate("document.querySelector('#github-connection').getAttribute('aria-busy')"), "true");
+  await writeFile("_temp/github-loading-sign-in.png", Buffer.from((await cdp("Page.captureScreenshot", { format: "png" })).data, "base64"));
+  releaseUser();
   await waitFor("!!document.querySelector('#github-install')");
   await waitFor("document.querySelector('#github-check-access')?.disabled === false");
+  assert.equal(await evaluate("!!document.querySelector('.connection-loader')"), false, "Access response stops the line");
+  userFailure = true;
+  await click("#github-check-access");
+  await waitFor("!!document.querySelector('#github-connection [role=alert]') && !document.querySelector('.connection-loader')");
+  assert.equal(await evaluate("document.querySelector('#github-connection').getAttribute('aria-busy')"), "false");
+  userFailure = false;
+  userPending = new Promise(resolve => { releaseUser = resolve; });
+  await cdp("Page.reload");
+  await waitFor("!!document.querySelector('.connection-loader') && !!document.querySelector('#github-check-access')");
+  assert.equal(await evaluate("document.querySelector('#github-connection').getAttribute('aria-busy')"), "true", "Restored session verifies access while busy");
+  assert.equal(await evaluate("document.querySelector('.connection-loader').getAttribute('aria-label')"), "Checking access…");
+  releaseUser();
+  await waitFor("document.querySelector('#github-check-access')?.disabled === false");
+  assert.equal(await evaluate("!!document.querySelector('.connection-loader')"), false);
   assert.equal(await evaluate("document.querySelector('#github-install').href"), "https://github.com/apps/rigel-cms/installations/new");
   assert.equal(await evaluate("document.querySelector('#github-connection').textContent.includes('You don’t have editing access. Contact the website administrator.')"), true);
   assert.equal(requests.some(request => !["GET", "OPTIONS"].includes(request.method)), false);
@@ -302,7 +357,7 @@ try {
   await waitFor("!!document.querySelector('#github-sign-in')");
   assert.equal(await evaluate("JSON.stringify({...localStorage,...sessionStorage}).includes('ghu_fixture_user_token')"), false);
   assert.deepEqual(errors, []);
-  console.log("PASS: real CMS popup, installation/write gates, draft load/Unicode Save, no local writes, conflicts, expiry and revoked 401/403 recovery with wrong-account rejection, readback retry without duplicate commit/branch update, guarded sign-out, no token storage, AA/keyboard/light/dark 1280/390/320px (external transport is fixture-only)");
+  console.log("PASS: pending configuration/sign-in animated line, reduced-motion static line, configuration retry and auth error/idle teardown; real CMS popup, installation/write gates, draft load/Unicode Save, no local writes, conflicts, expiry and revoked 401/403 recovery with wrong-account rejection, readback retry without duplicate commit/branch update, guarded sign-out, no token storage, AA/keyboard/light/dark 1280/390/320px (external transport is fixture-only)");
 } finally {
   socket?.close(); chrome.kill("SIGKILL");
   await new Promise(resolve => gateway.close(resolve));

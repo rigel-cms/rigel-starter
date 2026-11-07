@@ -80,6 +80,7 @@ export async function checkAuthors({ cdp, evaluate, waitFor }) {
     assert.equal(await evaluate(`!!${newRow}.querySelector('.table-avatar-placeholder svg')`), true, 'New authors without a photo get the user icon');
     await evaluate(`${newRow}.querySelector('.table-link').click()`);
     await waitFor("!!document.querySelector('[data-schema-path=name] input')");
+    await cdp('Page.bringToFront');
     await evaluate("document.querySelector('[data-schema-path=name] input').focus()");
     await waitFor("document.activeElement === document.querySelector('[data-schema-path=name] input') && getComputedStyle(document.activeElement).outlineOffset === '3px'");
     assert.deepEqual(await evaluate("(() => { const panel = getComputedStyle(document.querySelector('.document-form .schema-panel')), section = getComputedStyle(document.querySelector('.document-form section')), focus = getComputedStyle(document.activeElement); return { x: panel.overflowX, y: panel.overflowY, background: panel.backgroundColor, section: section.backgroundColor, shadow: section.boxShadow, outline: focus.outlineWidth, offset: focus.outlineOffset, canvas: !!document.querySelector('.content.visual') }; })()"), { x: 'visible', y: 'visible', background: 'rgba(0, 0, 0, 0)', section: 'rgba(0, 0, 0, 0)', shadow: 'none', outline: '3px', offset: '3px', canvas: false });

@@ -1,4 +1,5 @@
 export async function openProperties({ evaluate, waitFor }) {
+  await waitFor("!!document.querySelector('[aria-label=\"Toggle properties panel\"]')");
   await evaluate(`(() => { const toggle = document.querySelector('[aria-label="Toggle properties panel"]'); if (toggle?.getAttribute('aria-pressed') === 'false') toggle.click(); })()`);
   await waitFor("!!document.querySelector('.schema-panel')");
 }

@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@rigel-cms/rigel':
-        specifier: 1.5.0-rc.4
-        version: 1.5.0-rc.4(astro@7.4.2(yaml@2.9.1))(svelte@5.57.2)(typescript@6.0.3)(vite@8.3.5(yaml@2.9.1))
+        specifier: 1.5.0-rc.9
+        version: 1.5.0-rc.9(astro@7.4.2(yaml@2.9.1))(svelte@5.57.2)(typescript@6.0.3)(vite@8.3.5(yaml@2.9.1))
       astro:
         specifier: ^7.3.2
         version: 7.4.2(yaml@2.9.1)
@@ -589,8 +589,8 @@ packages:
   '@preact/signals-core@1.14.4':
     resolution: {integrity: sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==}
 
-  '@rigel-cms/rigel@1.5.0-rc.4':
-    resolution: {integrity: sha512-1HVsrF7Pzo17G5qt+yuplvUWrZmuiTiiB0whJYj7X5y+bKVzn0PcL2pAJnul7QuypjHIShqah+oNk8tv1/tj/g==}
+  '@rigel-cms/rigel@1.5.0-rc.9':
+    resolution: {integrity: sha512-kJsGiXWfxqHnrJXOZ5MNB8Nm+kstxmQYRY/5IuEP7LUbJY2CYisw1NIrt+SmZPswwmogYliWy2Ug3b3MJ8I3xw==}
     engines: {node: '>=24.0.0 <25.0.0'}
     peerDependencies:
       astro: ^7.3.0
@@ -2430,7 +2430,7 @@ snapshots:
 
   '@preact/signals-core@1.14.4': {}
 
-  '@rigel-cms/rigel@1.5.0-rc.4(astro@7.4.2(yaml@2.9.1))(svelte@5.57.2)(typescript@6.0.3)(vite@8.3.5(yaml@2.9.1))':
+  '@rigel-cms/rigel@1.5.0-rc.9(astro@7.4.2(yaml@2.9.1))(svelte@5.57.2)(typescript@6.0.3)(vite@8.3.5(yaml@2.9.1))':
     dependencies:
       '@lexical/code': 0.52.0(typescript@6.0.3)
       '@lexical/history': 0.52.0(typescript@6.0.3)
