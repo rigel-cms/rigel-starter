@@ -9,6 +9,7 @@ const article = z.object({
   metaTitle: z.string().optional(),
   description: z.string().optional(),
   ogImage: z.string().optional(),
+  noindex: z.boolean().default(false),
   date: z.string(),
   author: z.union([z.string(), z.array(z.string())]),
   draft: z.boolean().default(false),

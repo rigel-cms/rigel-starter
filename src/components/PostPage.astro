@@ -9,7 +9,7 @@ const authorNames = (Array.isArray(data.author) ? data.author : [data.author]).f
   return author?.type === "author" ? String(author.data.name) : id;
 }).join(", ");
 ---
-<Base {locale} title={data.metaTitle?.trim() || data.title} description={data.description?.trim() || undefined} ogImage={data.ogImage?.trim() || undefined}>
+<Base {locale} title={data.metaTitle?.trim() || data.title} description={data.description?.trim() || undefined} ogImage={data.ogImage?.trim() || undefined} noindex={data.noindex === true}>
   <article class="wrap article section">
   <p><a class="text-link" href={collection.startsWith("articles-") ? `/${locale}/studio/` : `/${collection}/`}><Icon name="arrowLeft" /> {collection.startsWith("articles-") ? (locale === "fr" ? "Le studio" : "The studio") : collection === "blog" ? "Journal" : "News"}</a></p>
   <p class="muted">

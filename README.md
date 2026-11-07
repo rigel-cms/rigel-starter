@@ -51,6 +51,12 @@ With multilingual content enabled, Legal examples are available under `/en/legal
 
 Rigel CMS 1.4.0 provides the Pages Core/Legal/All filter, live page and article search, and the page-template creation dialog. Save a newly created schema page before opening its visual preview. Inline editing starts with Properties closed; use the panel toggle to open page fields or SEO settings.
 
+## Search indexing
+
+Rigel's SEO tab includes **No index (noindex)**, off by default. Saving `noindex: true` makes the shared page/article layout emit `<meta name="robots" content="noindex">`, including localized routes. Missing or false values leave indexing unchanged. This is separate from Draft: published pages remain accessible by URL and links remain followable. Rebuild and deploy saved changes to update production metadata. Search engines need to crawl the page to read the directive; do not block it in `robots.txt`. This starter does not generate a sitemap; exclude flagged URLs if you add one.
+
+Run `node tests/seo-output.mjs` for the production regression across page types, blog/news and localized articles. It builds temporary content fixtures and removes them in `finally`; run it separately from browser suites. With a local development server running, use `RIGEL_URL=http://localhost:4321/rigel/ pnpm test:browser seo` to check the switch, explicit Save, public metadata and reload roundtrip.
+
 ## License
 
 [Apache-2.0](LICENSE). Copyright 2026 [Alex Zappa](https://alex.zappa.dev/) ([FreshJuice](https://freshjuice.dev/)).
