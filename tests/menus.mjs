@@ -223,7 +223,7 @@ export async function checkMenus({ cdp, evaluate, waitFor }) {
     await click('#nav-pages');
     await waitFor("!!document.querySelector('.unsaved-dialog[open]')");
     await click('.unsaved-dialog .primary');
-    await waitFor("document.querySelector('main h2')?.textContent === 'All pages'");
+    await waitFor("!!document.querySelector('#nav-pages.active') && !!document.querySelector('.table-card') && !document.querySelector('.unsaved-dialog[open]')");
     assert.equal((await get()).items[0].label, 'Saved before navigation');
     await cdp('Page.reload');
     await waitFor("!!document.querySelector('#nav-menus')");

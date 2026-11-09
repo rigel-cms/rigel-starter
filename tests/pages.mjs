@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { openProperties } from './editor-controls.mjs';
+import { chooseSelect, openProperties } from './editor-controls.mjs';
 import { writeFile } from "node:fs/promises";
 
 export async function checkPages({ cdp, evaluate, waitFor }) {
@@ -9,6 +9,7 @@ export async function checkPages({ cdp, evaluate, waitFor }) {
   await checkEditorActions({ cdp, evaluate, waitFor });
   assert.equal(await evaluate("!!document.querySelector('.content-header')"), false);
   await evaluate("document.querySelector('#nav-pages').click()");
+  await chooseSelect({ evaluate, waitFor }, '[role=combobox][aria-label="Category"]', 'All pages');
   await waitFor("document.querySelector('main h2')?.textContent === 'All pages'");
   const pageDocuments = manifest.documents.filter(doc => !manifest.schema.documents.find(type => type.name === doc.type).shared);
   assert.equal(await evaluate("document.querySelectorAll('tbody tr').length"), manifest.pages.filter(page => !page.shared).length + pageDocuments.length);
@@ -43,6 +44,7 @@ export async function checkPages({ cdp, evaluate, waitFor }) {
     assert.equal(await evaluate("fetch('/rigel/api/local/documents/demo:fields').then(response => response.status)"), 404, 'Disabled Demo is not readable through the local API');
   }
   await evaluate("document.querySelector('#nav-pages').click()");
+  await chooseSelect({ evaluate, waitFor }, '[role=combobox][aria-label="Category"]', 'All pages');
   await waitFor("document.querySelector('main h2')?.textContent === 'All pages'");
   assert.equal(await evaluate("document.querySelector('main').classList.contains('wide')"), true);
   assert.equal(await evaluate("document.querySelector('.titlebar .primary')?.textContent"), "Add new");
@@ -113,6 +115,7 @@ export async function checkPages({ cdp, evaluate, waitFor }) {
     await waitFor("document.querySelector('main h2')?.textContent === 'All Legal pages'");
     assert.equal(await evaluate("document.querySelectorAll('tbody tr').length"), 1);
     await evaluate("document.querySelector('#nav-pages').click()");
+    await chooseSelect({ evaluate, waitFor }, '[role=combobox][aria-label="Category"]', 'All pages');
     await waitFor("document.querySelectorAll('tbody tr').length === 4");
     assert.equal(await evaluate("document.querySelector('.titlebar .primary')?.textContent"), "Add new");
     await evaluate("document.querySelector('[data-collection]').click()");
