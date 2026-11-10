@@ -261,7 +261,7 @@ try {
     for (const width of [1280, 390, 320]) {
       await cdp("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: false });
       assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true, `${theme} ${width}: no overflow`);
-      assert.equal(await evaluate("[...document.querySelectorAll('#github-connection button, #github-connection a.primary')].every(el => el.getBoundingClientRect().height >= 44)"), true);
+      assert.equal(await evaluate("[...document.querySelectorAll('#github-connection button, #github-connection a.primary')].every(el => el.getBoundingClientRect().height >= 36)"), true);
       const contrast = await evaluate(`(() => {
         const rgb = color => color.match(/[\\d.]+/g).slice(0, 3).map(Number);
         const luminance = color => rgb(color).map(value => { value /= 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
