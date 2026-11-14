@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 export async function testPreviewResize({ cdp, evaluate, waitFor, open, reload }) {
   const selector = '.preview-divider';
+  const restored = `location.hash === ${JSON.stringify(await evaluate('location.hash'))} && !!document.querySelector('.preview-divider') && !!document.querySelector('.site-preview iframe')?.contentDocument?.querySelector('[data-rigel-text]')`;
   const metrics = () => evaluate(`(() => {
     const d=document.querySelector('${selector}'), p=document.querySelector('.site-preview'), m=document.querySelector('main');
     const r=d.getBoundingClientRect();
@@ -34,9 +35,7 @@ export async function testPreviewResize({ cdp, evaluate, waitFor, open, reload }
   await open();
   assert.equal((await metrics()).saved,moved.saved);
   await reload();
-  await waitFor("!document.querySelector('.preview-divider') && !!document.querySelector('[data-doctype=author]')");
-  await open();
-  await waitFor("!!document.querySelector('.site-preview iframe')?.contentDocument?.querySelector('[data-rigel-text]')");
+  await waitFor(restored);
   await settled();
   assert.equal((await metrics()).saved,moved.saved);
   assert(Math.abs((await metrics()).editor-moved.editor)<2);
@@ -79,8 +78,7 @@ export async function testPreviewResize({ cdp, evaluate, waitFor, open, reload }
   for (const bad of ['bad',-1,2,null]) {
     await evaluate(`localStorage.setItem('rigelcms.settings',JSON.stringify({userPref:{previewSplit:${JSON.stringify(bad)}}}))`);
     await reload();
-    await waitFor("!document.querySelector('.preview-divider') && !!document.querySelector('[data-doctype=author]')");
-    await open(); await settled();
+    await waitFor(restored); await settled();
     assert.equal((await metrics()).saved,0.5);
   }
   await evaluate("window.realSetItem=Storage.prototype.setItem; Storage.prototype.setItem=function(){throw new Error('blocked')}");

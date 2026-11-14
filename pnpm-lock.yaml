@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@rigel-cms/rigel':
-        specifier: 1.5.0
-        version: 1.5.0(astro@7.4.2(yaml@2.9.1))(svelte@5.57.2)(typescript@6.0.3)(vite@8.3.5(yaml@2.9.1))
+        specifier: 1.6.0
+        version: 1.6.0(astro@7.4.2(yaml@2.9.1))(svelte@5.57.2)(typescript@6.0.3)(vite@8.3.5(yaml@2.9.1))
       astro:
         specifier: ^7.3.2
         version: 7.4.2(yaml@2.9.1)
@@ -228,6 +228,9 @@ packages:
   '@clack/prompts@1.8.1':
     resolution: {integrity: sha512-dlT1m5e/0yUL0kRNcQn7yGLVThkgbB0Ga/1AmfDDC/8ik6AIiSf2QLQO2zPYvefsHP0aFgxO93cVLCCfDp7kzQ==}
     engines: {node: '>= 20.12.0'}
+
+  '@discourse/heic@1.0.0':
+    resolution: {integrity: sha512-YMW5o0bHvhL4rjzGt7kpr8geqMEhP7yS20Hh5eMJtDOmHuCqn+icpNLr1ImFygU/yN39MUHVenETXcpDG6PPww==}
 
   '@emmetio/abbreviation@2.3.3':
     resolution: {integrity: sha512-mgv58UrU3rh4YgbE/TzgLQwJ3pFsHHhCLqY20aJq+9comytTXUDNGG/SMtSeMJdkpxgXSXunBGLD8Boka3JyVA==}
@@ -589,8 +592,8 @@ packages:
   '@preact/signals-core@1.14.4':
     resolution: {integrity: sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==}
 
-  '@rigel-cms/rigel@1.5.0':
-    resolution: {integrity: sha512-EaiuhNEjlGo/bMKZkj7htyPkJywGEbmwzki28kk9O5zsNTRlJqh2f4Qbeel/6oc4lBOZlqx0oNbpa39L/A7xWQ==}
+  '@rigel-cms/rigel@1.6.0':
+    resolution: {integrity: sha512-Ypv8z3us7Gmv8pZnR2pCiHq7Ivy8KBkTYFnVtyPiHv150041fH1kcijiS6l9b4aXDR8KVcUdCoe3kQ+3Sth2MQ==}
     engines: {node: '>=24.0.0 <25.0.0'}
     peerDependencies:
       astro: ^7.3.0
@@ -2089,6 +2092,8 @@ snapshots:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
+  '@discourse/heic@1.0.0': {}
+
   '@emmetio/abbreviation@2.3.3':
     dependencies:
       '@emmetio/scanner': 1.0.4
@@ -2430,8 +2435,9 @@ snapshots:
 
   '@preact/signals-core@1.14.4': {}
 
-  '@rigel-cms/rigel@1.5.0(astro@7.4.2(yaml@2.9.1))(svelte@5.57.2)(typescript@6.0.3)(vite@8.3.5(yaml@2.9.1))':
+  '@rigel-cms/rigel@1.6.0(astro@7.4.2(yaml@2.9.1))(svelte@5.57.2)(typescript@6.0.3)(vite@8.3.5(yaml@2.9.1))':
     dependencies:
+      '@discourse/heic': 1.0.0
       '@lexical/code': 0.52.0(typescript@6.0.3)
       '@lexical/history': 0.52.0(typescript@6.0.3)
       '@lexical/link': 0.52.0(typescript@6.0.3)

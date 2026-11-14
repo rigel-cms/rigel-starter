@@ -32,7 +32,8 @@ export async function checkHashNavigation({ cdp, evaluate, waitFor }) {
   const menuHash = route('menus', footer.slug);
   const titleIs = title => `document.querySelector('main .titlebar h2')?.textContent === ${quote(title)}`;
   const cases = [
-    ['#/pages', "!!document.querySelector('.pages-controls') && !!document.querySelector('.table-card')"],
+    ['#/pages', "!!document.querySelector('.pages-controls') && !!document.querySelector('.table-card')", '#/pages?all=1'],
+    ['#/pages?all=1', "!!document.querySelector('.pages-controls') && !!document.querySelector('.table-card')"],
     [documentHash, titleIs(about.data.title)],
     ['#/author', "!!document.querySelector('.table-card') && !document.querySelector('.pages-controls')"],
     ['#/collections/blog', "!!document.querySelector('[data-collection=blog].active') && !!document.querySelector('.table-card')"],
@@ -70,14 +71,14 @@ export async function checkHashNavigation({ cdp, evaluate, waitFor }) {
     await fresh('');
     await waitFor(welcome);
     assert.equal(await hash(), '', 'Plain /rigel/ must stay on Welcome');
-    for (const [fragment, ready] of cases) {
+    for (const [fragment, ready, canonical = fragment] of cases) {
       await fresh(fragment);
-      await expectHash(fragment);
+      await expectHash(canonical);
       await waitFor(ready);
       await evaluate("window.hashNavigationMarker = 'before-refresh'");
       await cdp('Page.reload');
       await waitFor("!!document.querySelector('#nav-pages') && window.hashNavigationMarker === undefined");
-      await expectHash(fragment);
+      await expectHash(canonical);
       await waitFor(ready);
     }
     if (manifest.contentLocales) {
@@ -101,7 +102,7 @@ export async function checkHashNavigation({ cdp, evaluate, waitFor }) {
     await waitFor(welcome);
     await evaluate("window.hashNavigationMarker = 'same-document'");
     for (const [selector, fragment, ready] of [
-      ['#nav-pages', '#/pages', "!!document.querySelector('.table-card')"],
+      ['#nav-pages', '#/pages?all=1', "!!document.querySelector('.table-card')"],
       ['[data-collection="blog"]', '#/collections/blog', "!!document.querySelector('[data-collection=blog].active') && !!document.querySelector('.table-card')"],
       ['#nav-menus', '#/menus', "!!document.querySelector('.table-card')"],
       ['#nav-media', '#/media', "!!document.querySelector('#nav-media.active')"],
