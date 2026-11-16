@@ -49,7 +49,7 @@ Appearance is a per-page property, not a category or route prefix. The native **
 
 With multilingual content enabled, Legal examples are available under `/en/legal/example/` and `/fr/legal/example/`. Each template declares its own allowed sections and creation defaults. Newly saved Legal pages use the legal route prefix; Core pages keep ordinary routes regardless of theme. Editor and website mappings are in `astro.config.mjs`. Restart the local development server after schema changes so its manifest and write routes use the new definitions.
 
-The starter uses Rigel CMS 1.6.0. Pages starts with All pages; select Core or Legal to narrow the list. New pages can preview before Save using their assigned template. Inline editing starts with Properties closed; opening it shows the Page tab. Switch to Content for fields.
+The starter uses Rigel CMS 1.6.1. Pages starts with All pages; select Core or Legal to narrow the list. New pages can preview before Save using their assigned template. Inline editing starts with Properties closed; opening it shows the Page tab. Switch to Content for fields.
 
 [Editing and recovery](https://rigelcms.dev/docs/editing/) covers keyboard shortcuts, browser draft backups and GitHub revision history. [Media](https://rigelcms.dev/docs/media/) covers batch uploads, image processing and saved-content usage checks.
 
